@@ -6,5 +6,6 @@ services:
     entrypoint: ["/usr/bin/tini", "--"]
     command: ["bash", "-c", "/docker-entrypoint-init.d/patch_angular.sh; exec bin/zeppelin.sh"]
 
+    volumes:
       # --- INIT SCRIPTS ---
       - ./patch_angular.sh:/docker-entrypoint-init.d/patch_angular.sh:ro
