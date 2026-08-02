@@ -1,0 +1,10 @@
+services:
+  zeppelin:
+    image: apache/zeppelin:0.12.1
+    container_name: zeppelin
+    hostname: zeppelin
+    entrypoint: ["/usr/bin/tini", "--"]
+    command: ["bash", "-c", "/docker-entrypoint-init.d/patch_angular.sh; exec bin/zeppelin.sh"]
+
+      # --- INIT SCRIPTS ---
+      - ./patch_angular.sh:/docker-entrypoint-init.d/patch_angular.sh:ro
