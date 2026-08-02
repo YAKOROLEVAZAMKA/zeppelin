@@ -1,4 +1,4 @@
-# Zeppelin 0.12.1 sidebar navigation fix
+# Zeppelin 0.12.1 sidebar navigation TEMPORARY fix
 
 Workaround for a bug in Apache Zeppelin **0.12.1**: clicking a different notebook
 in the sidebar updates the URL, but the page content doesn't change — you have
