@@ -1,0 +1,11 @@
+services:
+  zeppelin:
+    image: apache/zeppelin:0.12.1
+    container_name: zeppelin
+    hostname: zeppelin
+    entrypoint: ["/usr/bin/tini", "--"]
+    command: ["bash", "-c", "/docker-entrypoint-init.d/patch_scroll.sh; exec bin/zeppelin.sh"]
+
+    volumes:
+      # --- INIT SCRIPTS ---
+      - ./patch_scroll.sh:/docker-entrypoint-init.d/patch_scroll.sh:ro
