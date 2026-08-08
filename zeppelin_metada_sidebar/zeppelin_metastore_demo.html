@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeppelin Metastore Sidebar — макет</title>
+<style>
+html, body { margin:0; padding:0; height:100%; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; background:#f5f7f9; color:#1f2933; }
+.zp-nav { height:48px; background:#3071a9; color:#fff; display:flex; align-items:center; gap:22px; padding:0 20px; font-size:14px; }
+.zp-logo { font-size:19px; font-weight:600; letter-spacing:.4px; }
+.zp-navitem { opacity:.94; }
+.zp-navsearch { background:rgba(255,255,255,.16); border-radius:4px; padding:4px 46px 4px 12px; font-size:12px; opacity:.85; }
+.zp-content { padding:22px 44px 60px 34px; max-width:1180px; }
+.zp-notetitle { font-size:22px; font-weight:600; margin-bottom:10px; }
+.zp-actionbar { display:flex; gap:18px; font-size:12px; color:#7b8794; border-bottom:1px solid #e0e5ea; padding-bottom:9px; margin-bottom:20px; }
+.zp-int { margin-left:auto; font-family:ui-monospace,Menlo,Consolas,monospace; color:#3071a9; }
+.zp-para { background:#fff; border:1px solid #e0e5ea; border-radius:4px; margin-bottom:16px; overflow:hidden; }
+.zp-para.zp-dim { opacity:.62; }
+.zp-paratitle { font-size:12px; color:#7b8794; padding:8px 14px 0; }
+.zp-editor { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px; line-height:1.65;
+  padding:10px 14px 16px; white-space:pre-wrap; min-height:34px; color:#1f2933; }
+.zp-editor.zp-focus { background:#fdfdf8; box-shadow:inset 3px 0 0 #3071a9; }
+.zp-kw { color:#0b7285; font-weight:600; }
+.zp-parafoot { font-size:11px; color:#9aa5b1; border-top:1px solid #f0f2f5; padding:5px 14px; }
+.zp-hint { margin-top:26px; background:#fffbe8; border:1px solid #f2e2a8; border-radius:5px; padding:13px 16px;
+  font-size:13px; line-height:1.7; color:#5c4a12; max-width:760px; }
+.zp-hint code { background:#fff; border:1px solid #e6d999; border-radius:3px; padding:0 4px;
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; }
+</style>
+</head>
+<body>
+
+<div class="zp-nav">
+  <div class="zp-logo">&#9737; Zeppelin</div>
+  <div class="zp-navitem">Notebook &#9662;</div>
+  <div class="zp-navitem">Job</div>
+  <div style="flex:1"></div>
+  <div class="zp-navsearch">Search</div>
+  <div class="zp-navitem">&#9679; admin &#9662;</div>
+</div>
+
+<div class="zp-content">
+  <div class="zp-notetitle">1. smykov / Ad-hoc &#8212; GGR by channel</div>
+  <div class="zp-actionbar">
+    <span>&#9654; Run all</span><span>&#128065; Show code</span><span>&#9881; </span><span class="zp-int">%greengage</span>
+  </div>
+
+  <div class="zp-para">
+    <div class="zp-paratitle">Выручка по каналам за месяц</div>
+    <div class="zp-editor" id="ace1"><span class="zp-kw">SELECT</span>
+    </div>
+    <div class="zp-parafoot">Took 0 sec. Last updated by admin at August 07 2026, 2:31:04 PM.</div>
+  </div>
+
+  <div class="zp-para zp-dim">
+    <div class="zp-paratitle">Проверка загрузки</div>
+    <div class="zp-editor"><span class="zp-kw">SELECT</span> max(load_dts) <span class="zp-kw">FROM</span> dv_raw_ru.s_bet_account_kfk</div>
+    <div class="zp-parafoot">Took 2 sec. Last updated by admin at August 07 2026, 1:02:44 PM.</div>
+  </div>
+
+  <div class="zp-hint">
+    <b>Это интерактивный макет.</b> Фон имитирует страницу Zeppelin, панель справа &#8212; реальный код.<br>
+    Откройте панель кнопкой <b>«Данные»</b> справа или по <b>Alt+D</b>. Попробуйте найти <code>account_id</code>,
+    <code>bonus</code> или <code>deposit_detail</code>. Клик по колонке вставляет её в параграф выше,
+    кнопка <b>SELECT</b> вставляет готовый запрос.
+  </div>
+</div>
+
+<script>window.__ZM_CATALOG__ = {
+  "generated_at": "2026-08-07 11:40:02",
+  "dbs": [
+    {
+      "key": "ch",
+      "name": "ClickHouse",
+      "badge": "CH",
+      "color": "#f5b53f",
+      "schemas": [
+        {
+          "name": "prod",
+          "desc": "Основные прод-таблицы",
+          "tables": [
+            {"name": "cupis_bets", "desc": "MK_bets — Информация по ставкам", "rows": 1842330119, "size": "412.8 GiB", "engine": "ReplicatedMergeTree", "doc": "#", "cols": [
+              {"n": "bet_id", "t": "UInt64", "c": "Идентификатор ставки", "k": "ORDER BY"},
+              {"n": "account_id", "t": "UInt64", "c": "Идентификатор счёта игрока"},
+              {"n": "bet_dt", "t": "DateTime", "c": "Дата и время ставки", "k": "PARTITION BY"},
+              {"n": "bet_sum", "t": "Decimal(18, 2)", "c": "Сумма ставки"},
+              {"n": "win_sum", "t": "Decimal(18, 2)", "c": "Сумма выигрыша"},
+              {"n": "coefficient", "t": "Float64", "c": "Итоговый коэффициент"},
+              {"n": "bet_status", "t": "LowCardinality(String)", "c": "Статус ставки"},
+              {"n": "is_live", "t": "UInt8", "c": "Признак live-ставки"},
+              {"n": "channel", "t": "LowCardinality(String)", "c": "Канал: web / mobile / retail"},
+              {"n": "currency_code", "t": "FixedString(3)", "c": "Валюта счёта"},
+              {"n": "updated_at", "t": "DateTime", "c": "Техническое время обновления записи"}
+            ]},
+            {"name": "cupis_cashes", "desc": "MK_cashes — Информация по кешам", "rows": 903112884, "size": "188.1 GiB", "engine": "ReplicatedMergeTree", "doc": "#", "cols": [
+              {"n": "cash_id", "t": "UInt64", "c": "Идентификатор транзакции", "k": "ORDER BY"},
+              {"n": "account_id", "t": "UInt64", "c": "Идентификатор счёта игрока"},
+              {"n": "cash_dt", "t": "DateTime", "c": "Дата и время транзакции", "k": "PARTITION BY"},
+              {"n": "cash_sum", "t": "Decimal(18, 2)", "c": "Сумма транзакции"},
+              {"n": "cash_type", "t": "LowCardinality(String)", "c": "deposit / withdrawal"},
+              {"n": "payment_system", "t": "String", "c": "Платёжная система"},
+              {"n": "is_success", "t": "UInt8", "c": "Признак успешной операции"}
+            ]},
+            {"name": "cupis_bonus_add", "desc": "Начисления бонусов", "rows": 74221903, "size": "12.4 GiB", "engine": "ReplicatedMergeTree", "doc": "#", "cols": [
+              {"n": "bonus_id", "t": "UInt64", "c": "Идентификатор бонуса", "k": "ORDER BY"},
+              {"n": "account_id", "t": "UInt64", "c": "Идентификатор счёта игрока"},
+              {"n": "bonus_dt", "t": "DateTime", "c": "Дата начисления", "k": "PARTITION BY"},
+              {"n": "bonus_sum", "t": "Decimal(18, 2)", "c": "Сумма бонуса"},
+              {"n": "campaign_id", "t": "UInt32", "c": "Идентификатор кампании"}
+            ]}
+          ]
+        },
+        {
+          "name": "prod_bi",
+          "desc": "Витрины для визуализации в Superset",
+          "tables": [
+            {"name": "dm_player_daily", "desc": "Дневной срез по игроку", "rows": 4120044210, "size": "702.3 GiB", "engine": "ReplicatedSummingMergeTree", "cols": [
+              {"n": "report_dt", "t": "Date", "c": "Отчётная дата", "k": "PARTITION BY"},
+              {"n": "account_id", "t": "UInt64", "c": "Идентификатор счёта игрока", "k": "ORDER BY"},
+              {"n": "ggr", "t": "Decimal(18, 2)", "c": "Gross Gaming Revenue"},
+              {"n": "ngr", "t": "Decimal(18, 2)", "c": "Net Gaming Revenue"},
+              {"n": "bets_cnt", "t": "UInt32", "c": "Количество ставок за день"},
+              {"n": "deposit_sum", "t": "Decimal(18, 2)", "c": "Сумма депозитов за день"},
+              {"n": "is_active", "t": "UInt8", "c": "Признак активности игрока"}
+            ]},
+            {"name": "dm_retention_cohort", "desc": "Когортный retention", "rows": 88213004, "size": "9.7 GiB", "engine": "ReplicatedMergeTree", "cols": [
+              {"n": "cohort_month", "t": "Date", "c": "Месяц регистрации когорты", "k": "PARTITION BY"},
+              {"n": "period_num", "t": "UInt8", "c": "Номер периода от регистрации"},
+              {"n": "players_cnt", "t": "UInt32", "c": "Количество игроков в когорте"},
+              {"n": "retention_rate", "t": "Float32", "c": "Доля вернувшихся"}
+            ]}
+          ]
+        },
+        {
+          "name": "prod_usermart",
+          "desc": "Рассчётные таблицы-кирпичики для аналитиков",
+          "tables": [
+            {"name": "um_first_deposit", "desc": "Первый депозит игрока", "rows": 18220331, "size": "1.9 GiB", "engine": "ReplicatedReplacingMergeTree", "cols": [
+              {"n": "account_id", "t": "UInt64", "c": "Идентификатор счёта игрока", "k": "ORDER BY"},
+              {"n": "first_deposit_dt", "t": "DateTime", "c": "Дата первого депозита"},
+              {"n": "first_deposit_sum", "t": "Decimal(18, 2)", "c": "Сумма первого депозита"},
+              {"n": "acquisition_channel", "t": "LowCardinality(String)", "c": "Канал привлечения"}
+            ]},
+            {"name": "um_ltv", "desc": "LTV игрока накопительным итогом", "rows": 18220331, "size": "3.2 GiB", "engine": "ReplicatedReplacingMergeTree", "cols": [
+              {"n": "account_id", "t": "UInt64", "c": "Идентификатор счёта игрока", "k": "ORDER BY"},
+              {"n": "ltv_ggr", "t": "Decimal(18, 2)", "c": "LTV по GGR"},
+              {"n": "ltv_ngr", "t": "Decimal(18, 2)", "c": "LTV по NGR"},
+              {"n": "lifetime_days", "t": "UInt16", "c": "Срок жизни игрока в днях"}
+            ]}
+          ]
+        },
+        {
+          "name": "prod_appsflyer",
+          "desc": "Данные из Appsflyer",
+          "tables": [
+            {"name": "installs", "desc": "Установки приложения", "rows": 240113002, "size": "44.0 GiB", "engine": "ReplicatedMergeTree", "cols": [
+              {"n": "install_dt", "t": "DateTime", "c": "Дата установки", "k": "PARTITION BY"},
+              {"n": "appsflyer_id", "t": "String", "c": "Идентификатор устройства AppsFlyer", "k": "ORDER BY"},
+              {"n": "media_source", "t": "LowCardinality(String)", "c": "Источник трафика"},
+              {"n": "campaign", "t": "String", "c": "Название кампании"},
+              {"n": "platform", "t": "LowCardinality(String)", "c": "ios / android"}
+            ]}
+          ]
+        },
+        {
+          "name": "input_yandex_metrica",
+          "desc": "Данные из Яндекс.Метрики",
+          "tables": [
+            {"name": "visits", "desc": "Визиты на сайт", "rows": 1120440221, "size": "210.5 GiB", "engine": "ReplicatedMergeTree", "cols": [
+              {"n": "visit_dt", "t": "DateTime", "c": "Дата визита", "k": "PARTITION BY"},
+              {"n": "client_id", "t": "UInt64", "c": "Идентификатор клиента Метрики", "k": "ORDER BY"},
+              {"n": "utm_source", "t": "String", "c": "UTM source"},
+              {"n": "utm_campaign", "t": "String", "c": "UTM campaign"},
+              {"n": "device_category", "t": "LowCardinality(String)", "c": "Тип устройства"}
+            ]}
+          ]
+        }
+      ]
+    },
+    {
+      "key": "gg",
+      "name": "Greengage",
+      "badge": "GG",
+      "color": "#4caf7d",
+      "schemas": [
+        {
+          "name": "mart_ru",
+          "desc": "Аналитические таблицы",
+          "tables": [
+            {"name": "bet_account_detail", "desc": "Детализация по счетам игроков", "rows": 18220331, "size": "6.1 GB", "engine": "AO column, distributed by account_id", "doc": "#", "cols": [
+              {"n": "account_id", "t": "bigint", "c": "Идентификатор счёта игрока", "k": "DISTRIBUTED BY"},
+              {"n": "client_id", "t": "bigint", "c": "Идентификатор клиента"},
+              {"n": "reg_dt", "t": "timestamp", "c": "Дата регистрации"},
+              {"n": "currency_code", "t": "varchar(3)", "c": "Валюта счёта"},
+              {"n": "account_status", "t": "varchar(32)", "c": "Статус счёта"},
+              {"n": "is_verified", "t": "boolean", "c": "Признак верификации ЦУПИС"}
+            ]},
+            {"name": "bonus_detail", "desc": "Начисление бонусов", "rows": 74221903, "size": "18.2 GB", "engine": "AO column, partitioned by month", "doc": "#", "cols": [
+              {"n": "bonus_id", "t": "bigint", "c": "Идентификатор бонуса"},
+              {"n": "account_id", "t": "bigint", "c": "Идентификатор счёта игрока", "k": "DISTRIBUTED BY"},
+              {"n": "bonus_dt", "t": "timestamp", "c": "Дата начисления", "k": "PARTITION BY"},
+              {"n": "bonus_sum", "t": "numeric(18,2)", "c": "Сумма бонуса"},
+              {"n": "bonus_type", "t": "varchar(64)", "c": "Тип бонуса"},
+              {"n": "campaign_id", "t": "integer", "c": "Идентификатор кампании"}
+            ]},
+            {"name": "deposit_detail", "desc": "Начисление депозитов", "rows": 502113889, "size": "96.4 GB", "engine": "AO column, partitioned by month", "doc": "#", "cols": [
+              {"n": "deposit_id", "t": "bigint", "c": "Идентификатор депозита"},
+              {"n": "account_id", "t": "bigint", "c": "Идентификатор счёта игрока", "k": "DISTRIBUTED BY"},
+              {"n": "deposit_dt", "t": "timestamp", "c": "Дата депозита", "k": "PARTITION BY"},
+              {"n": "deposit_sum", "t": "numeric(18,2)", "c": "Сумма депозита"},
+              {"n": "payment_system", "t": "varchar(128)", "c": "Платёжная система"},
+              {"n": "is_first", "t": "boolean", "c": "Признак первого депозита"}
+            ]},
+            {"name": "withdrawal_detail", "desc": "Вывод денег", "rows": 210044112, "size": "41.8 GB", "engine": "AO column, partitioned by month", "doc": "#", "cols": [
+              {"n": "withdrawal_id", "t": "bigint", "c": "Идентификатор вывода"},
+              {"n": "account_id", "t": "bigint", "c": "Идентификатор счёта игрока", "k": "DISTRIBUTED BY"},
+              {"n": "withdrawal_dt", "t": "timestamp", "c": "Дата вывода", "k": "PARTITION BY"},
+              {"n": "withdrawal_sum", "t": "numeric(18,2)", "c": "Сумма вывода"},
+              {"n": "reject_reason", "t": "varchar(256)", "c": "Причина отказа, если есть"}
+            ]},
+            {"name": "fee_detail", "desc": "Информация о комиссии", "rows": 88401220, "size": "14.9 GB", "engine": "AO column", "doc": "#", "cols": [
+              {"n": "fee_id", "t": "bigint", "c": "Идентификатор комиссии"},
+              {"n": "account_id", "t": "bigint", "c": "Идентификатор счёта игрока", "k": "DISTRIBUTED BY"},
+              {"n": "fee_dt", "t": "timestamp", "c": "Дата списания комиссии"},
+              {"n": "fee_sum", "t": "numeric(18,2)", "c": "Сумма комиссии"}
+            ]}
+          ]
+        },
+        {
+          "name": "dv_raw_ru",
+          "desc": "RAW DataVault",
+          "tables": [
+            {"name": "h_bet_account", "desc": "Хаб счёта игрока", "rows": 18220331, "size": "2.1 GB", "engine": "AO row, distributed by hk_bet_account", "doc": "#", "cols": [
+              {"n": "hk_bet_account", "t": "bytea", "c": "Хеш-ключ хаба", "k": "DISTRIBUTED BY"},
+              {"n": "bet_account_bk", "t": "varchar(128)", "c": "Бизнес-ключ счёта"},
+              {"n": "load_dts", "t": "timestamp", "c": "Дата загрузки в DV"},
+              {"n": "rec_src", "t": "varchar(64)", "c": "Источник записи"}
+            ]},
+            {"name": "s_bet_account_kfk", "desc": "Сателлит счёта из Кафки", "rows": 402118330, "size": "58.3 GB", "engine": "AO column, partitioned by month", "doc": "#", "cols": [
+              {"n": "hk_bet_account", "t": "bytea", "c": "Хеш-ключ хаба", "k": "DISTRIBUTED BY"},
+              {"n": "load_dts", "t": "timestamp", "c": "Дата загрузки в DV", "k": "PARTITION BY"},
+              {"n": "hash_diff", "t": "bytea", "c": "Хеш атрибутов для дельты"},
+              {"n": "account_status", "t": "varchar(32)", "c": "Статус счёта"},
+              {"n": "balance", "t": "numeric(18,2)", "c": "Баланс на момент события"}
+            ]}
+          ]
+        },
+        {
+          "name": "str_kfk_ru",
+          "desc": "Полная история данных из Кафки",
+          "tables": [
+            {"name": "bet_cupis", "desc": "Сырые ставки из Кафки", "rows": 1842330119, "size": "388.0 GB", "engine": "AO column, partitioned by day", "doc": "#", "cols": [
+              {"n": "bet_id", "t": "bigint", "c": "Идентификатор ставки", "k": "DISTRIBUTED BY"},
+              {"n": "event_dt", "t": "timestamp", "c": "Время события в Кафке", "k": "PARTITION BY"},
+              {"n": "payload", "t": "jsonb", "c": "Исходное сообщение целиком"},
+              {"n": "kafka_offset", "t": "bigint", "c": "Смещение в топике"},
+              {"n": "kafka_partition", "t": "integer", "c": "Партиция топика"}
+            ]},
+            {"name": "cash_cupis", "desc": "Сырые транзакции из Кафки", "rows": 903112884, "size": "201.2 GB", "engine": "AO column, partitioned by day", "doc": "#", "cols": [
+              {"n": "cash_id", "t": "bigint", "c": "Идентификатор транзакции", "k": "DISTRIBUTED BY"},
+              {"n": "event_dt", "t": "timestamp", "c": "Время события в Кафке", "k": "PARTITION BY"},
+              {"n": "payload", "t": "jsonb", "c": "Исходное сообщение целиком"}
+            ]},
+            {"name": "login_cupis", "desc": "События входа игрока", "rows": 3201884220, "size": "142.7 GB", "engine": "AO column, partitioned by day", "doc": "#", "cols": [
+              {"n": "account_id", "t": "bigint", "c": "Идентификатор счёта игрока", "k": "DISTRIBUTED BY"},
+              {"n": "login_dt", "t": "timestamp", "c": "Время входа", "k": "PARTITION BY"},
+              {"n": "ip_address", "t": "inet", "c": "IP-адрес входа"},
+              {"n": "user_agent", "t": "text", "c": "User-Agent клиента"}
+            ]},
+            {"name": "event_status", "desc": "Статусы событий", "rows": 44118220, "size": "3.8 GB", "engine": "AO column", "doc": "#", "cols": [
+              {"n": "event_id", "t": "bigint", "c": "Идентификатор события", "k": "DISTRIBUTED BY"},
+              {"n": "status_code", "t": "varchar(32)", "c": "Код статуса"},
+              {"n": "changed_dt", "t": "timestamp", "c": "Время смены статуса"}
+            ]}
+          ]
+        },
+        {
+          "name": "stg_kfk_ru",
+          "desc": "Сервисная схема для загрузки данных из Кафки",
+          "tables": [
+            {"name": "stg_bet_cupis", "desc": "Стейджинг ставок", "rows": 2201884, "size": "0.4 GB", "engine": "heap", "cols": [
+              {"n": "bet_id", "t": "bigint", "c": "Идентификатор ставки"},
+              {"n": "payload", "t": "jsonb", "c": "Исходное сообщение"},
+              {"n": "batch_id", "t": "bigint", "c": "Идентификатор пачки загрузки"}
+            ]}
+          ]
+        }
+      ]
+    },
+    {
+      "key": "pg",
+      "name": "PostgreSQL Metadata",
+      "badge": "PG",
+      "color": "#7b9fd4",
+      "schemas": [
+        {
+          "name": "catalog",
+          "desc": "Описания схем, таблиц и колонок (источник правды для этой панели)",
+          "tables": [
+            {"name": "schema_desc", "desc": "Описания схем", "rows": 14, "size": "48 kB", "engine": "heap", "cols": [
+              {"n": "db_key", "t": "text", "c": "ch / gg / pg", "k": "PK"},
+              {"n": "schema_name", "t": "text", "c": "Имя схемы", "k": "PK"},
+              {"n": "description", "t": "text", "c": "Описание схемы"},
+              {"n": "updated_by", "t": "text", "c": "Кто последний правил"},
+              {"n": "updated_at", "t": "timestamptz", "c": "Когда правили"}
+            ]},
+            {"name": "table_desc", "desc": "Описания таблиц и ссылки на XWiki", "rows": 312, "size": "192 kB", "engine": "heap", "cols": [
+              {"n": "db_key", "t": "text", "c": "ch / gg / pg", "k": "PK"},
+              {"n": "schema_name", "t": "text", "c": "Имя схемы", "k": "PK"},
+              {"n": "table_name", "t": "text", "c": "Имя таблицы", "k": "PK"},
+              {"n": "description", "t": "text", "c": "Описание таблицы"},
+              {"n": "doc_url", "t": "text", "c": "Ссылка на страницу XWiki"}
+            ]},
+            {"name": "column_desc", "desc": "Описания колонок", "rows": 4821, "size": "1.1 MB", "engine": "heap", "cols": [
+              {"n": "db_key", "t": "text", "c": "ch / gg / pg", "k": "PK"},
+              {"n": "schema_name", "t": "text", "c": "Имя схемы", "k": "PK"},
+              {"n": "table_name", "t": "text", "c": "Имя таблицы", "k": "PK"},
+              {"n": "column_name", "t": "text", "c": "Имя колонки", "k": "PK"},
+              {"n": "description", "t": "text", "c": "Описание колонки"}
+            ]},
+            {"name": "snapshot", "desc": "Слепки каталога для истории изменений схемы", "rows": 1204, "size": "82 MB", "engine": "heap", "cols": [
+              {"n": "snapshot_id", "t": "bigserial", "c": "Идентификатор слепка", "k": "PK"},
+              {"n": "collected_at", "t": "timestamptz", "c": "Время сбора"},
+              {"n": "payload", "t": "jsonb", "c": "Каталог целиком"}
+            ]}
+          ]
+        }
+      ]
+    }
+  ]
+}
+;</script>
+<script>/* ==========================================================================
+   Zeppelin Metastore Sidebar — core rendering engine
+   Shared by the standalone demo and the production bundle.
+   No external dependencies. No storage APIs.
+   ========================================================================== */
+(function (global) {
+  'use strict';
+
+  var CSS = `
+  .zm-root, .zm-root * { box-sizing: border-box; }
+  /* z-index 900 — НИЖЕ всех слоёв Bootstrap, на котором построен classic UI:
+     dropdown 1000, navbar-fixed-top 1030, modal-backdrop 1040, modal 1050,
+     popover 1060, tooltip 1070. Любое меню и любое окно Zeppelin — включая
+     выпадающее меню пользователя с входом-выходом — перекрывает панель,
+     а не наоборот. Панель не должна перехватывать клики хозяйского интерфейса.
+     --zm-top — высота фиксированной шапки Zeppelin, считается в рантайме,
+     чтобы панель начиналась под ней и не закрывала навбар. */
+  .zm-root {
+    position: fixed; right: 0; z-index: 900;
+    top: var(--zm-top, 0px); height: calc(100vh - var(--zm-top, 0px));
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px; color: #1f2933; display: flex; align-items: stretch;
+    transition: transform .18s cubic-bezier(.4,0,.2,1);
+  }
+  /* Свёрнутое состояние — компактная вкладка, а не полоса во всю высоту:
+     иначе она перекрывает кнопки параграфов Zeppelin по всей странице. */
+  .zm-rail {
+    width: 26px; flex: 0 0 26px; background: #2f4858; color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; cursor: pointer; user-select: none;
+    box-shadow: -2px 0 8px rgba(0,0,0,.22);
+    align-self: center; height: auto; padding: 14px 0;
+    border-radius: 7px 0 0 7px; opacity: .82;
+    transition: opacity .15s, background .15s;
+  }
+  .zm-rail:hover { background: #3a586c; opacity: 1; }
+  /* когда панель открыта — плашка сливается с ней в одну колонку */
+  .zm-root.zm-open .zm-rail {
+    align-self: stretch; justify-content: flex-start; padding-top: 12px;
+    border-radius: 0; opacity: 1;
+  }
+  .zm-rail-icon { font-size: 14px; line-height: 1; }
+  .zm-rail-label {
+    writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 2.2px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; opacity: .9;
+  }
+  .zm-rail-count {
+    writing-mode: vertical-rl; font-size: 9px; opacity: .55; letter-spacing: 1px;
+  }
+  /* положение вкладки по вертикали — ZM_CONFIG.railPosition */
+  .zm-root.zm-rail-top    .zm-rail { align-self: flex-start; margin-top: 64px; }
+  .zm-root.zm-rail-bottom .zm-rail { align-self: flex-end;   margin-bottom: 48px; }
+  .zm-root.zm-open.zm-rail-top    .zm-rail,
+  .zm-root.zm-open.zm-rail-bottom .zm-rail { align-self: stretch; margin: 0; }
+  .zm-panel {
+    width: 0; overflow: hidden; background: #fff; border-left: 1px solid #d8dee4;
+    display: flex; flex-direction: column; transition: width .18s cubic-bezier(.4,0,.2,1);
+    box-shadow: -6px 0 20px rgba(15,30,45,.10); position: relative;
+  }
+  .zm-root.zm-open .zm-panel { width: var(--zm-w, 420px); }
+  .zm-root.zm-dragging .zm-panel { transition: none; }   /* при перетаскивании — без инерции */
+
+  /* ручка изменения ширины по левому краю */
+  .zm-grip {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize;
+    z-index: 2; background: transparent;
+  }
+  .zm-grip:hover, .zm-root.zm-dragging .zm-grip { background: #3071a9; opacity: .35; }
+  .zm-root.zm-dragging { user-select: none; }
+
+  .zm-head { padding: 9px 10px 8px; border-bottom: 1px solid #e6eaee; background: #f7f9fb; flex: 0 0 auto; }
+  .zm-head-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .zm-title { font-weight: 700; font-size: 12px; letter-spacing: .4px; text-transform: uppercase; color: #52606d; flex: 1; }
+  .zm-x { border: 0; background: none; cursor: pointer; color: #7b8794; font-size: 17px; line-height: 1; padding: 0 3px; }
+  .zm-x:hover { color: #1f2933; }
+  .zm-search-wrap { position: relative; }
+  .zm-search {
+    width: 100%; padding: 6px 26px 6px 27px; border: 1px solid #cbd2d9; border-radius: 4px;
+    font-size: 13px; outline: none; background: #fff;
+  }
+  .zm-search:focus { border-color: #3071a9; box-shadow: 0 0 0 2px rgba(48,113,169,.14); }
+  .zm-search-ico { position: absolute; left: 8px; top: 6px; color: #9aa5b1; font-size: 12px; pointer-events: none; }
+  .zm-clear { position: absolute; right: 6px; top: 4px; border: 0; background: none; cursor: pointer; color: #9aa5b1; font-size: 15px; display: none; }
+  .zm-root.zm-searching .zm-clear { display: block; }
+  .zm-filters { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+  .zm-chip {
+    border: 1px solid #cbd2d9; background: #fff; border-radius: 11px; padding: 2px 9px;
+    font-size: 11px; cursor: pointer; color: #52606d; font-weight: 600; letter-spacing: .3px;
+  }
+  .zm-chip.zm-on { background: #2f4858; border-color: #2f4858; color: #fff; }
+
+  .zm-body { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 4px 0 12px; }
+  .zm-body::-webkit-scrollbar { width: 9px; }
+  .zm-body::-webkit-scrollbar-thumb { background: #cbd2d9; border-radius: 5px; }
+  .zm-body::-webkit-scrollbar-thumb:hover { background: #9aa5b1; }
+
+  .zm-row { display: flex; align-items: center; gap: 5px; padding: 3px 10px 3px 8px; cursor: pointer; line-height: 1.35; }
+  .zm-row:hover { background: #eef4f9; }
+  .zm-row.zm-sel { background: #e0ecf6; }
+  .zm-tw { width: 12px; flex: 0 0 12px; color: #9aa5b1; font-size: 9px; text-align: center; transition: transform .12s; }
+  .zm-tw.zm-rot { transform: rotate(90deg); }
+  .zm-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .zm-db > .zm-name { font-weight: 700; font-size: 12.5px; }
+  .zm-badge {
+    font-size: 9px; font-weight: 800; letter-spacing: .5px; padding: 1px 5px; border-radius: 3px;
+    color: #fff; flex: 0 0 auto;
+  }
+  .zm-schema { padding-left: 16px; }
+  .zm-schema > .zm-name { font-weight: 600; color: #323f4b; }
+  .zm-table { padding-left: 28px; }
+  .zm-col   { padding-left: 42px; cursor: pointer; }
+  .zm-col .zm-name {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
+    flex: 0 1 auto; min-width: 0; max-width: 60%;
+  }
+  .zm-type {
+    color: #7b8794; font-size: 11px; white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Метка ключа короткая и не переносится: DISTRIBUTED BY в 392 px ломало строку */
+  .zm-key {
+    font-size: 8.5px; font-weight: 800; color: #b06f00; background: #fff3d6;
+    border-radius: 2px; padding: 1px 3px; letter-spacing: .3px;
+    flex: 0 0 auto; white-space: nowrap; cursor: help;
+  }
+  .zm-meta { color: #9aa5b1; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+  .zm-spacer { flex: 1 1 auto; min-width: 4px; }
+  .zm-acts { display: none; gap: 2px; flex: 0 0 auto; }
+  .zm-row:hover .zm-acts { display: flex; }
+  .zm-act {
+    border: 0; background: #fff; border: 1px solid #d8dee4; border-radius: 3px; cursor: pointer;
+    font-size: 10px; padding: 1px 5px; color: #52606d; line-height: 1.5;
+  }
+  .zm-act:hover { background: #2f4858; border-color: #2f4858; color: #fff; }
+
+  .zm-secthead {
+    padding: 8px 10px 3px; font-size: 10px; font-weight: 800; letter-spacing: .8px;
+    text-transform: uppercase; color: #9aa5b1;
+  }
+  .zm-crumb { color: #9aa5b1; font-size: 11px; }
+
+  /* two-line search result rows: the name must never be truncated */
+  .zm-sr { align-items: flex-start; padding: 4px 10px 4px 9px; }
+  .zm-sr .zm-badge { margin-top: 2px; }
+  .zm-sr-txt { flex: 1 1 auto; min-width: 0; }
+  .zm-sr-l1 { display: flex; align-items: baseline; gap: 6px; }
+  .zm-sr-l1 .zm-name { flex: 0 0 auto; overflow: visible; }
+  .zm-sr-l1 .zm-type { flex: 0 0 auto; }
+  .zm-sr-l1 .zm-crumb { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .zm-sr-l2 {
+    color: #7b8794; font-size: 11px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; margin-top: 1px;
+  }
+  .zm-sr .zm-acts { margin-top: 1px; }
+  .zm-hit { background: #ffe9a8; border-radius: 2px; font-weight: 700; }
+  .zm-empty { padding: 26px 16px; text-align: center; color: #9aa5b1; font-size: 12px; line-height: 1.6; }
+
+  .zm-foot {
+    flex: 0 0 auto; border-top: 1px solid #e6eaee; background: #f7f9fb;
+    padding: 5px 10px; display: flex; align-items: center; gap: 8px;
+    font-size: 10.5px; color: #7b8794; flex-wrap: nowrap; overflow: hidden;
+  }
+  .zm-foot > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .zm-foot button {
+    border: 1px solid #cbd2d9; background: #fff; border-radius: 3px; cursor: pointer;
+    font-size: 10.5px; padding: 1px 7px; color: #52606d; flex: 0 0 auto; white-space: nowrap;
+  }
+  .zm-foot button:hover { background: #eef4f9; }
+  .zm-toast {
+    position: fixed; bottom: 18px; right: 410px; background: #1f2933; color: #fff;
+    padding: 7px 13px; border-radius: 4px; font-size: 12px; z-index: 950;
+    opacity: 0; transform: translateY(6px); transition: opacity .18s, transform .18s; pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .zm-toast.zm-show { opacity: 1; transform: translateY(0); }
+  `;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function mark(text, q) {
+    var t = String(text == null ? '' : text);
+    if (!q) return esc(t);
+    var i = t.toLowerCase().indexOf(q);
+    if (i < 0) return esc(t);
+    return esc(t.slice(0, i)) + '<span class="zm-hit">' + esc(t.slice(i, i + q.length)) + '</span>' + esc(t.slice(i + q.length));
+  }
+
+  /* PostgreSQL пишет типы полностью — в узкой панели это съедает всю строку.
+     Показываем короткий вариант, полный оставляем в подсказке. */
+  var TYPE_SHORT = [
+    [/^timestamp without time zone/, 'timestamp'],
+    [/^timestamp with time zone/,    'timestamptz'],
+    [/^time without time zone/,      'time'],
+    [/^time with time zone/,         'timetz'],
+    [/^character varying/,           'varchar'],
+    [/^character(?!\s*varying)/,     'char'],
+    [/^double precision/,            'float8'],
+    [/^real$/,                       'float4'],
+    [/^boolean/,                     'bool'],
+    [/^integer/,                     'int4'],
+    [/^smallint/,                    'int2'],
+    [/^bigint/,                      'int8'],
+  ];
+
+  function shortType(t) {
+    var s = String(t == null ? '' : t);
+    for (var i = 0; i < TYPE_SHORT.length; i++) {
+      if (TYPE_SHORT[i][0].test(s)) return s.replace(TYPE_SHORT[i][0], TYPE_SHORT[i][1]);
+    }
+    return s;
+  }
+
+  var KEY_SHORT = {
+    'DISTRIBUTED BY': 'DIST',
+    'PARTITION BY': 'PART',
+    'ORDER BY': 'ORDER',
+  };
+
+  function keyTag(k) {
+    if (!k) return '';
+    return '<span class="zm-key" title="' + esc(k) + '">' + esc(KEY_SHORT[k] || k) + '</span>';
+  }
+
+  function fmtRows(n) {
+    if (n == null) return '';
+    if (n >= 1e9) return (n / 1e9).toFixed(1).replace('.0', '') + ' млрд';
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace('.0', '') + ' млн';
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + ' тыс';
+    return String(n);
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  function Metastore(opts) {
+    this.opts = opts || {};
+    this.catalog = null;
+    this.index = [];
+    this.open = new Set();      // expanded node paths
+    this.dbFilter = new Set();  // empty = all
+    this.query = '';
+    this.el = null;
+    this._build();
+  }
+
+  Metastore.prototype._build = function () {
+    if (!document.getElementById('zm-style')) {
+      var st = document.createElement('style');
+      st.id = 'zm-style';
+      st.textContent = CSS;
+      document.head.appendChild(st);
+    }
+
+    var root = document.createElement('div');
+    root.className = 'zm-root';
+    var pos = this.opts.railPosition;                 // 'center' (по умолчанию) | 'top' | 'bottom'
+    if (pos === 'top' || pos === 'bottom') root.classList.add('zm-rail-' + pos);
+    root.innerHTML =
+      '<div class="zm-rail" title="Метаданные хранилища (Alt+D)">' +
+        '<span class="zm-rail-icon">&#9776;</span>' +
+        '<span class="zm-rail-label">Данные</span>' +
+        '<span class="zm-rail-count"></span>' +
+      '</div>' +
+      '<div class="zm-panel">' +
+        '<div class="zm-grip" title="Потяните, чтобы изменить ширину. Двойной клик — по умолчанию"></div>' +
+        '<div class="zm-head">' +
+          '<div class="zm-head-top">' +
+            '<span class="zm-title">Метаданные хранилища</span>' +
+            '<button class="zm-x" title="Свернуть">&times;</button>' +
+          '</div>' +
+          '<div class="zm-search-wrap">' +
+            '<span class="zm-search-ico">&#128269;</span>' +
+            '<input class="zm-search" type="text" placeholder="Схема, таблица или колонка…" spellcheck="false">' +
+            '<button class="zm-clear" title="Очистить">&times;</button>' +
+          '</div>' +
+          '<div class="zm-filters"></div>' +
+        '</div>' +
+        '<div class="zm-body"><div class="zm-empty">Загрузка каталога…</div></div>' +
+        '<div class="zm-foot"></div>' +
+      '</div>';
+
+    var toast = document.createElement('div');
+    toast.className = 'zm-toast';
+
+    (this.opts.mount || document.body).appendChild(root);
+    (this.opts.mount || document.body).appendChild(toast);
+
+    this.el = root;
+    this.toastEl = toast;
+    this.bodyEl = root.querySelector('.zm-body');
+    this.footEl = root.querySelector('.zm-foot');
+    this.searchEl = root.querySelector('.zm-search');
+    this.filtersEl = root.querySelector('.zm-filters');
+
+    var self = this;
+    this._renderFooter('каталог не загружен');
+    root.querySelector('.zm-rail').addEventListener('click', function () { self.toggle(); });
+    root.querySelector('.zm-x').addEventListener('click', function () { self.toggle(false); });
+    root.querySelector('.zm-clear').addEventListener('click', function () {
+      self.searchEl.value = ''; self.query = ''; self.el.classList.remove('zm-searching'); self.render(); self.searchEl.focus();
+    });
+
+    var deb;
+    this.searchEl.addEventListener('input', function () {
+      clearTimeout(deb);
+      deb = setTimeout(function () {
+        self.query = self.searchEl.value.trim().toLowerCase();
+        self.el.classList.toggle('zm-searching', !!self.query);
+        self.render();
+      }, 110);
+    });
+
+    this.bodyEl.addEventListener('click', function (e) {
+      var act = e.target.closest('.zm-act');
+      if (act) { e.stopPropagation(); self._action(act.dataset.act, JSON.parse(act.dataset.ref)); return; }
+      var row = e.target.closest('.zm-row');
+      if (!row) return;
+      if (row.dataset.path) {
+        if (self.open.has(row.dataset.path)) self.open.delete(row.dataset.path);
+        else self.open.add(row.dataset.path);
+        self.render();
+      } else if (row.dataset.ref) {
+        self._action('insert', JSON.parse(row.dataset.ref));
+      }
+    });
+
+    this._initResize();
+    this._initTopOffset();
+
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey && (e.key === 'd' || e.key === 'D' || e.code === 'KeyD')) {
+        e.preventDefault(); self.toggle();
+        if (self.el.classList.contains('zm-open')) self.searchEl.focus();
+      }
+      if (e.key === 'Escape' && self.el.classList.contains('zm-open') && document.activeElement === self.searchEl) {
+        self.searchEl.blur();
+      }
+    });
+  };
+
+  /* ---------------------------------------------------------- ширина панели */
+
+  var WIDTH_KEY = 'zmSidebarWidth';
+  var WIDTH_MIN = 300;
+  var WIDTH_DEFAULT = 420;
+
+  function readWidth() {
+    try {
+      var v = parseInt(window.localStorage.getItem(WIDTH_KEY), 10);
+      if (v >= WIDTH_MIN) return v;
+    } catch (e) { /* приватный режим или запрет хранилища — просто не помним */ }
+    return WIDTH_DEFAULT;
+  }
+
+  function saveWidth(w) {
+    try { window.localStorage.setItem(WIDTH_KEY, String(w)); } catch (e) { /* не критично */ }
+  }
+
+  Metastore.prototype.setWidth = function (w, persist) {
+    var max = Math.max(WIDTH_MIN, window.innerWidth - 120);
+    this.width = Math.round(Math.min(Math.max(w, WIDTH_MIN), max));
+    this.el.style.setProperty('--zm-w', this.width + 'px');
+    // тост не должен уезжать под панель
+    this.toastEl.style.right = (this.width + 18) + 'px';
+    if (persist) saveWidth(this.width);
+  };
+
+  /* Панель начинается под фиксированной шапкой Zeppelin, а не поверх неё.
+     Высота шапки берётся из DOM: в classic UI и в новом UI она разная,
+     да и Angular дорисовывает её асинхронно — поэтому пересчитываем несколько раз. */
+  Metastore.prototype._initTopOffset = function () {
+    var self = this;
+    var SELECTORS = ['.navbar-fixed-top', 'nav.navbar', 'zeppelin-header', '.zeppelin-header', 'header'];
+
+    function measure() {
+      var top = 0;
+      for (var i = 0; i < SELECTORS.length; i++) {
+        var el = document.querySelector(SELECTORS[i]);
+        if (!el) continue;
+        var cs = window.getComputedStyle(el);
+        if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+        var r = el.getBoundingClientRect();
+        if (r.top <= 1 && r.height > 0 && r.height < 200) { top = Math.round(r.height); break; }
+      }
+      self.el.style.setProperty('--zm-top', top + 'px');
+    }
+
+    measure();
+    [300, 1200, 3000].forEach(function (ms) { setTimeout(measure, ms); });
+    window.addEventListener('resize', measure);
+  };
+
+  Metastore.prototype._initResize = function () {
+    var self = this;
+    var grip = this.el.querySelector('.zm-grip');
+    var startX = 0, startW = 0;
+
+    this.setWidth(readWidth(), false);
+
+    function onMove(e) {
+      // панель прижата к правому краю: тянем влево — становится шире
+      self.setWidth(startW + (startX - e.clientX), false);
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      self.el.classList.remove('zm-dragging');
+      saveWidth(self.width);
+    }
+
+    grip.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      startX = e.clientX;
+      startW = self.width;
+      self.el.classList.add('zm-dragging');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    grip.addEventListener('dblclick', function () {
+      self.setWidth(WIDTH_DEFAULT, true);
+      self.toast('Ширина по умолчанию — ' + WIDTH_DEFAULT + ' px');
+    });
+
+    window.addEventListener('resize', function () { self.setWidth(self.width, false); });
+  };
+
+  Metastore.prototype.toggle = function (force) {
+    var willOpen = force === undefined ? !this.el.classList.contains('zm-open') : !!force;
+    this.el.classList.toggle('zm-open', willOpen);
+    if (willOpen) { var s = this.searchEl; setTimeout(function () { s.focus(); }, 200); }
+  };
+
+  Metastore.prototype.toast = function (msg) {
+    var t = this.toastEl;
+    t.textContent = msg;
+    t.classList.add('zm-show');
+    clearTimeout(this._tt);
+    this._tt = setTimeout(function () { t.classList.remove('zm-show'); }, 2000);
+  };
+
+  Metastore.prototype.setCatalog = function (cat) {
+    this.catalog = cat;
+    this.index = [];
+    var self = this, nTab = 0, nCol = 0;
+    (cat.dbs || []).forEach(function (db) {
+      (db.schemas || []).forEach(function (sc) {
+        self.index.push({ kind: 'schema', db: db, sc: sc, name: sc.name, desc: sc.desc });
+        (sc.tables || []).forEach(function (tb) {
+          nTab++;
+          self.index.push({ kind: 'table', db: db, sc: sc, tb: tb, name: tb.name, desc: tb.desc });
+          (tb.cols || []).forEach(function (co) {
+            nCol++;
+            self.index.push({ kind: 'column', db: db, sc: sc, tb: tb, co: co, name: co.n, desc: co.c });
+          });
+        });
+      });
+    });
+
+    this.el.querySelector('.zm-rail-count').textContent = nTab + ' таб';
+    this.filtersEl.innerHTML = (cat.dbs || []).map(function (db) {
+      return '<button class="zm-chip" data-db="' + esc(db.key) + '">' + esc(db.badge || db.name) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(this.filtersEl.children, function (btn) {
+      btn.addEventListener('click', function () {
+        var k = btn.dataset.db;
+        if (self.dbFilter.has(k)) self.dbFilter.delete(k); else self.dbFilter.add(k);
+        btn.classList.toggle('zm-on', self.dbFilter.has(k));
+        self.render();
+      });
+    });
+
+    this._renderFooter('обновлено ' + String(cat.generated_at || '—').slice(0, 16),
+                       nTab + ' табл · ' + (nCol >= 10000 ? Math.round(nCol / 1000) + 'k' : nCol) + ' кол');
+    this.render();
+  };
+
+  /** Подвал есть всегда — в том числе когда каталог не загрузился,
+   *  иначе переспросить можно было бы только через F5. */
+  Metastore.prototype._renderFooter = function (left, right) {
+    var self = this;
+    this.footEl.innerHTML =
+      '<span>' + esc(left) + '</span>' +
+      '<span style="flex:1"></span>' +
+      (right ? '<span>' + esc(right) + '</span>' : '') +
+      '<button class="zm-refresh">Обновить</button>';
+    this.footEl.querySelector('.zm-refresh').addEventListener('click', function () {
+      self.footEl.querySelector('.zm-refresh').textContent = '…';
+      if (self.onRetry) self.onRetry();
+      else if (self.opts.onRefresh) self.opts.onRefresh();
+    });
+  };
+
+  /** Состояние ошибки: понятная причина, техническая деталь и когда повторим. */
+  Metastore.prototype.showError = function (html, detail, retryInSec) {
+    this.bodyEl.innerHTML =
+      '<div class="zm-empty" style="text-align:left;padding:20px 14px">' +
+        '<div style="color:#1f2933;font-size:13px;line-height:1.6">' + html + '</div>' +
+        '<div style="margin-top:12px;font-size:11px;color:#cf5555;word-break:break-all">' +
+          esc(detail) + '</div>' +
+        (retryInSec
+          ? '<div style="margin-top:10px;font-size:11px">Повторю сам через ' +
+            retryInSec + ' с — или нажмите «Обновить» внизу.</div>'
+          : '') +
+      '</div>';
+    this._renderFooter('каталог не загружен');
+  };
+
+  Metastore.prototype._dbOk = function (db) {
+    return this.dbFilter.size === 0 || this.dbFilter.has(db.key);
+  };
+
+  Metastore.prototype._ref = function (it) {
+    return esc(JSON.stringify({
+      db: it.db.key, dbName: it.db.name, sc: it.sc.name,
+      tb: it.tb ? it.tb.name : null, co: it.co ? it.co.n : null,
+      doc: it.tb ? (it.tb.doc || '') : '',
+      cols: it.tb ? (it.tb.cols || []).map(function (c) { return c.n; }) : []
+    }));
+  };
+
+  Metastore.prototype._tableActs = function (it) {
+    var r = this._ref(it);
+    var s = '<span class="zm-acts">' +
+      '<button class="zm-act" data-act="select" data-ref="' + r + '" title="Вставить SELECT в параграф">SELECT</button>' +
+      '<button class="zm-act" data-act="copy" data-ref="' + r + '" title="Копировать полное имя">⧉</button>';
+    if (it.tb && it.tb.doc) s += '<button class="zm-act" data-act="doc" data-ref="' + r + '" title="Открыть описание в XWiki">?</button>';
+    return s + '</span>';
+  };
+
+  Metastore.prototype.render = function () {
+    if (!this.catalog) return;
+    this.query ? this._renderSearch() : this._renderTree();
+  };
+
+  Metastore.prototype._renderTree = function () {
+    var self = this, h = [];
+    (this.catalog.dbs || []).forEach(function (db) {
+      if (!self._dbOk(db)) return;
+      var dbPath = db.key, dbOpen = self.open.has(dbPath);
+      h.push('<div class="zm-row zm-db" data-path="' + esc(dbPath) + '">' +
+        '<span class="zm-tw' + (dbOpen ? ' zm-rot' : '') + '">&#9654;</span>' +
+        '<span class="zm-badge" style="background:' + esc(db.color) + '">' + esc(db.badge) + '</span>' +
+        '<span class="zm-name">' + esc(db.name) + '</span>' +
+        '<span class="zm-spacer"></span>' +
+        '<span class="zm-meta" style="flex:0 0 auto">' + (db.schemas || []).length + '</span></div>');
+      if (!dbOpen) return;
+
+      (db.schemas || []).forEach(function (sc) {
+        var scPath = dbPath + '.' + sc.name, scOpen = self.open.has(scPath);
+        h.push('<div class="zm-row zm-schema" data-path="' + esc(scPath) + '">' +
+          '<span class="zm-tw' + (scOpen ? ' zm-rot' : '') + '">&#9654;</span>' +
+          '<span class="zm-name">' + esc(sc.name) + '</span>' +
+          '<span class="zm-meta">' + esc(sc.desc || '') + '</span></div>');
+        if (!scOpen) return;
+
+        (sc.tables || []).forEach(function (tb) {
+          var tbPath = scPath + '.' + tb.name, tbOpen = self.open.has(tbPath);
+          var it = { db: db, sc: sc, tb: tb };
+          h.push('<div class="zm-row zm-table" data-path="' + esc(tbPath) + '" title="' + esc(tb.desc || tb.name) + '">' +
+            '<span class="zm-tw' + (tbOpen ? ' zm-rot' : '') + '">&#9654;</span>' +
+            '<span class="zm-name">' + esc(tb.name) + '</span>' +
+            '<span class="zm-meta">' + esc(tb.desc || '') + '</span>' +
+            self._tableActs(it) + '</div>');
+          if (!tbOpen) return;
+
+          (tb.cols || []).forEach(function (co) {
+            var cit = { db: db, sc: sc, tb: tb, co: co };
+            var tip = co.n + ' ' + co.t + (co.k ? ' [' + co.k + ']' : '') + (co.c ? ' — ' + co.c : '');
+            h.push('<div class="zm-row zm-col" data-ref="' + self._ref(cit) + '" title="' + esc(tip) + '">' +
+              '<span class="zm-tw"></span>' +
+              '<span class="zm-name">' + esc(co.n) + '</span>' +
+              keyTag(co.k) +
+              '<span class="zm-type">' + esc(shortType(co.t)) + '</span>' +
+              '<span class="zm-meta">' + esc(co.c || '') + '</span></div>');
+          });
+
+          if (tb.rows != null || tb.engine) {
+            h.push('<div class="zm-row zm-col" style="cursor:default"><span class="zm-tw"></span>' +
+              '<span class="zm-meta" style="font-style:italic">' +
+              (tb.rows != null ? '~' + fmtRows(tb.rows) + ' строк' : '') +
+              (tb.size ? ' · ' + esc(tb.size) : '') +
+              (tb.engine ? ' · ' + esc(tb.engine) : '') + '</span></div>');
+          }
+        });
+      });
+    });
+    this.bodyEl.innerHTML = h.join('') || '<div class="zm-empty">Нет данных</div>';
+  };
+
+  Metastore.prototype._renderSearch = function () {
+    var q = this.query, self = this;
+    var buckets = { table: [], column: [], schema: [] };
+
+    this.index.forEach(function (it) {
+      if (!self._dbOk(it.db)) return;
+      var name = String(it.name).toLowerCase();
+      var pos = name.indexOf(q);
+      var score;
+      if (pos === 0) score = 0;
+      else if (pos > 0) score = 1;
+      else if ((it.desc || '').toLowerCase().indexOf(q) >= 0) score = 2;
+      else return;
+      buckets[it.kind].push({ it: it, score: score });
+    });
+
+    var order = [
+      ['table', 'Таблицы'],
+      ['column', 'Колонки'],
+      ['schema', 'Схемы']
+    ];
+    var h = [], total = 0;
+
+    order.forEach(function (pair) {
+      var kind = pair[0], list = buckets[kind];
+      if (!list.length) return;
+      list.sort(function (a, b) { return a.score - b.score || a.it.name.length - b.it.name.length; });
+      var shown = list.slice(0, kind === 'column' ? 120 : 80);
+      total += list.length;
+      h.push('<div class="zm-secthead">' + pair[1] + ' · ' + list.length +
+        (list.length > shown.length ? ' (показано ' + shown.length + ')' : '') + '</div>');
+
+      shown.forEach(function (r) {
+        var it = r.it;
+        var badge = '<span class="zm-badge" style="background:' + esc(it.db.color) + '">' + esc(it.db.badge) + '</span>';
+
+        if (kind === 'table') {
+          h.push('<div class="zm-row zm-sr" data-ref="' + self._ref(it) + '" title="' + esc(it.tb.desc || it.tb.name) + '">' + badge +
+            '<div class="zm-sr-txt">' +
+              '<div class="zm-sr-l1"><span class="zm-name">' + mark(it.tb.name, q) + '</span>' +
+                '<span class="zm-crumb">' + esc(it.sc.name) + '</span></div>' +
+              '<div class="zm-sr-l2">' + esc(it.tb.desc || '—') +
+                (it.tb.rows != null ? ' · ~' + fmtRows(it.tb.rows) + ' строк' : '') + '</div>' +
+            '</div>' + self._tableActs(it) + '</div>');
+
+        } else if (kind === 'column') {
+          var ctip = it.sc.name + '.' + it.tb.name + '.' + it.co.n + ' ' + it.co.t +
+                     (it.co.k ? ' [' + it.co.k + ']' : '') + (it.co.c ? ' — ' + it.co.c : '');
+          h.push('<div class="zm-row zm-sr" data-ref="' + self._ref(it) + '" title="' + esc(ctip) + '">' + badge +
+            '<div class="zm-sr-txt">' +
+              '<div class="zm-sr-l1">' +
+                '<span class="zm-name" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px">' + mark(it.co.n, q) + '</span>' +
+                '<span class="zm-type">' + esc(shortType(it.co.t)) + '</span>' +
+                keyTag(it.co.k) +
+              '</div>' +
+              '<div class="zm-sr-l2"><b style="font-weight:600;color:#52606d">' + esc(it.sc.name + '.' + it.tb.name) + '</b>' +
+                (it.co.c ? ' — ' + esc(it.co.c) : '') + '</div>' +
+            '</div></div>');
+
+        } else {
+          h.push('<div class="zm-row zm-sr" data-path="' + esc(it.db.key + '.' + it.sc.name) + '">' + badge +
+            '<div class="zm-sr-txt">' +
+              '<div class="zm-sr-l1"><span class="zm-name">' + mark(it.sc.name, q) + '</span>' +
+                '<span class="zm-crumb">' + esc(it.db.name) + '</span></div>' +
+              '<div class="zm-sr-l2">' + esc(it.sc.desc || '—') + ' · ' + (it.sc.tables || []).length + ' табл.</div>' +
+            '</div></div>');
+        }
+      });
+    });
+
+    this.bodyEl.innerHTML = total
+      ? h.join('')
+      : '<div class="zm-empty">Ничего не найдено по «' + esc(this.query) + '»<br><span style="font-size:11px">Попробуйте часть имени колонки, например <b>account_id</b></span></div>';
+  };
+
+  Metastore.prototype.fqn = function (ref) {
+    return ref.sc + '.' + ref.tb;
+  };
+
+  Metastore.prototype._action = function (act, ref) {
+    var handler = this.opts.onAction;
+    if (act === 'doc') {
+      if (ref.doc && ref.doc !== '#') window.open(ref.doc, '_blank');
+      else this.toast('Ссылка на описание не заполнена');
+      return;
+    }
+    var text;
+    if (act === 'select') {
+      var cols = (ref.cols || []).slice(0, 12);
+      var more = (ref.cols || []).length > cols.length;
+      text = 'SELECT\n    ' + (cols.length ? cols.join(',\n    ') + (more ? '\n    -- …' : '') : '*') +
+        '\nFROM ' + this.fqn(ref) + '\nLIMIT 100';
+    } else if (act === 'copy') {
+      text = this.fqn(ref);
+    } else {
+      text = ref.co ? ref.co : this.fqn(ref);
+    }
+    if (handler) handler(act, text, ref, this);
+  };
+
+  global.ZeppelinMetastore = Metastore;
+})(window);
+</script>
+<script>
+var catalog = window.__ZM_CATALOG__;
+var editor = document.getElementById('ace1');
+editor.classList.add('zp-focus');
+
+function insertIntoEditor(text) {
+  var cur = editor.textContent.replace(/\s+$/, '');
+  var needsNl = /(^|\n)\s*SELECT\s*$/i.test(cur) === false && cur.length > 0;
+  editor.textContent = cur + (cur.endsWith('SELECT') ? '\n    ' : (needsNl ? '\n' : '')) + text;
+  editor.innerHTML = editor.innerHTML
+    .replace(/\b(SELECT|FROM|WHERE|LIMIT|GROUP BY|ORDER BY|JOIN)\b/g, '<span class="zp-kw">$1</span>');
+  editor.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+var ms = new ZeppelinMetastore({
+  onAction: function (act, text, ref, self) {
+    if (act === 'copy') {
+      if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(function () {}); }
+      self.toast('Скопировано: ' + text);
+    } else if (act === 'select') {
+      editor.textContent = '';
+      insertIntoEditor(text);
+      self.toast('SELECT вставлен в параграф');
+    } else {
+      insertIntoEditor(text);
+      self.toast('Вставлено: ' + text);
+    }
+  },
+  onRefresh: function () { ms.toast('В проде здесь перечитывается каталог из Zeppelin REST API'); }
+});
+
+ms.setCatalog(catalog);
+ms.open.add('gg'); ms.open.add('gg.mart_ru');
+ms.render();
+setTimeout(function () { ms.toggle(true); }, 450);
+</script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+  <property>
+    <name>zeppelin.notebook.cron.enable</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>zeppelin.notebook.cron.folders</name>
+    <value>/</value>
+    <description>Comma separated list of folders that can use cron. * means all folders.</description>
+  </property>
+<property>
+  <name>zeppelin.notebook.cache.threshold</name>
+  <value>2000</value>
+  <description>Maximum number of notebooks kept in memory. Increase this to avoid 'Can not evict note' warnings.</description>
+</property>
+<property>
+  <name>zeppelin.notebook.max.loaded</name>
+  <value>2000</value>
+</property>
+  <property>
+    <name>zeppelin.notebook.auth.enable</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>zeppelin.jobmanager.enable</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>zeppelin.rest.interpreter.enable</name>
+    <value>true</value>
+    <description>Allow REST API to create/update/delete interpreter settings</description>
+  </property>
+<property>
+  <name>zeppelin.server.allowed.origins</name>
+  <value>*</value>
+  <description>Allowed sources for REST and WebSocket requests (i.e. http://onehost:8080,http://otherhost.com). If you leave * you are vulnerable to https://issues.apache.org/jira/browse/ZEPPELIN-173</description>
+</property>
+  <property>
+    <name>zeppelin.jdbc.concurrent.use</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>zeppelin.metrics.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>zeppelin.metrics.port</name>
+    <value>8181</value>
+  </property>
+<property>
+  <name>zeppelin.markdown.sanitizer.enable</name>
+  <value>false</value>
+</property>
+<property>
+  <name>zeppelin.interpreter.mode</name>
+  <value>scoped</value>
+  <description>Interpreter mode: shared | scoped | isolated WAS ISLOLATED</description>
+</property>
+<property>
+  <name>zeppelin.jdbc.dependencies</name>
+  <value>/opt/zeppelin/interpreter/jdbc/bigquery/*.jar</value>
+</property>
+<property>
+  <name>zeppelin.interpreter.connect.timeout</name>
+  <value>300000</value> <!-- 5 min -->
+</property>
+<property>
+  <name>zeppelin.jdbc.maxConnLifetime</name>
+  <value>600000</value> <!-- 10 min -->
+</property>
+<property>
+  <name>zeppelin.notebook.storage</name>
+  <value>org.apache.zeppelin.notebook.repo.GitNotebookRepo</value>
+<!--  <value>org.apache.zeppelin.notebook.repo.VFSNotebookRepo</value>  -->
+  <description>notebook persistence layer implementation</description>
+</property>
+<property>
+  <name>zeppelin.notebook.git.localRepo</name>
+  <value>/opt/zeppelin/notebook</value>
+</property>
+<!--
+<property>
+  <name>zeppelin.notebook.git.autoCommit</name>
+  <value>true</value>
+  <description>Automatically commit notebook changes to Git</description>
+</property>
+-->
+<property>
+    <name>zeppelin.interpreter.lifecyclemanager.timeout.threshold</name>
+    <value>120000</value>
+    <description>The idle timeout limit, in milliseconds.</description>
+</property>
+
+<!-- ========================================================================
+     METASTORE — боковая панель метаданных DWH
+     ========================================================================
+     IndexHtmlServlet подставляет содержимое <value> перед </body> в index.html
+     при каждом запросе, для обоих UI. WAR при этом не трогается.
+
+     ВНИМАНИЕ: внутри CDATA — ТОЛЬКО ASCII, никакой кириллицы и типографики.
+     Сервлет пишет ответ так:
+         resp.setContentType("text/html");   // без charset
+         resp.getWriter().append(content);   // setCharacterEncoding не вызывается
+     а getWriter() без явной кодировки по спецификации сервлетов работает
+     в ISO-8859-1. Любой не-ASCII символ отсюда уедет в страницу битым.
+     Комментарии на русском пишите здесь и в <description> — они не инжектятся.
+
+     railPosition: center | top | bottom — где висит свёрнутая вкладка.
+     Порт 8086 = MS_WEB_PORT из .env. Меняете там — поменяйте здесь.
+     Хост не зашит: панель берёт его из адресной строки, поэтому работает
+     и по IP, и по доменному имени.
+
+     Выключить панель: закомментировать это свойство и пересоздать контейнер
+     (docker compose up -d zeppelin).
+     ======================================================================== -->
+<property>
+  <name>zeppelin.server.html.body.addon</name>
+  <value><![CDATA[<script>
+(function () {
+  var base = location.protocol + "//" + location.hostname + ":8086";
+  window.ZM_CONFIG = {
+    catalogUrl: base + "/metastore-catalog.json",
+    refreshMinutes: 30,
+    railPosition: "center"
+  };
+  var s = document.createElement("script");
+  s.defer = true;
+  s.src = base + "/zeppelin-metastore.js";
+  document.body.appendChild(s);
+})();
+</script>]]></value>
+  <description>Боковая панель метаданных: грузит скрипт и каталог с metastore-web. Внутри CDATA только ASCII</description>
+</property>
+
+</configuration>

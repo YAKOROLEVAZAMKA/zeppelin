@@ -1,0 +1,215 @@
+{
+  "paragraphs": [
+    {
+      "title": "Что это такое",
+      "text": "%md\n# 00. Metastore — каталог DWH\n\nСобирает схемы, таблицы и **колонки** из ClickHouse, Greengage и PostgreSQL,\nскладывает в `metastore-db` и отдаёт боковой панели в Zeppelin.\n\n| Параграф | Что делает | Как часто запускать |\n|---|---|---|\n| 1. Конфигурация | подключения из `.env`, проверка связи | при каждом запуске ноута |\n| 2. DDL | создаёт `catalog.*` в metastore-db | один раз |\n| 3. `load_catalog_data()` | собирает метаданные и пишет каталог | по расписанию |\n| 4. Описания | заполнить `desc_*` вручную | по мере надобности |\n\n**Что где лежит в `metastore-db`:**\n\n* `catalog.desc_schema` / `desc_table` / `desc_column` — описания, которые пишете вы.\n  Коллектор их **не трогает**.\n* `catalog.obj_table` / `obj_column` — сырьё из системных каталогов.\n  Полностью перезаписывается каждый прогон.\n* `catalog.snapshot` — собранный JSON целиком, последние 30 прогонов.\n* `catalog.v_search` — плоский вид для поиска SQL-ом.\n\nПанель читает не базу напрямую (браузер не умеет в протокол PostgreSQL),\nа файл `metastore-catalog.json`, который этот ноут кладёт в общий volume.\nОтдаёт файл nginx.\n",
+      "user": "anonymous",
+      "dateUpdated": "2026-08-07T12:00:00+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12.0,
+        "fontSize": 9.0,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "md",
+          "editOnDblClick": true,
+          "completionKey": "TAB",
+          "completionSupport": false
+        },
+        "editorMode": "ace/mode/markdown",
+        "editorHide": true,
+        "tableHide": false
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_metastore_01",
+      "id": "paragraph_metastore_01",
+      "dateCreated": "2026-08-07T12:00:00+0000",
+      "status": "READY"
+    },
+    {
+      "title": "1. Конфигурация и подключения",
+      "text": "%python\n# =============================================================================\n#  1. Конфигурация и подключения\n#  Всё берётся из переменных окружения (файл .env → docker-compose → контейнер).\n#  Паролей в коде нет.\n# =============================================================================\nimport os, sys, json, gzip, base64, datetime, fnmatch\n\n# питоновские зависимости, доставленные init_metastore.sh в volume\nsys.path.insert(0, '/metastore/pylibs')\n\nimport psycopg2\nimport psycopg2.extras\nfrom clickhouse_driver import Client as ClickHouseClient\n\n\ndef env(name, default=None, required=False):\n    v = os.environ.get(name, default)\n    if required and not v:\n        raise RuntimeError(f'Не задана переменная окружения {name} — проверьте .env')\n    return v\n\n\n# ── куда складываем результат ────────────────────────────────────────────────\nMS_DSN = dict(\n    host=env('MS_DB_HOST', 'metastore-db'),\n    port=int(env('MS_DB_PORT', '5432')),\n    dbname=env('MS_DB_NAME', 'metastore'),\n    user=env('MS_DB_USER', required=True),\n    password=env('MS_DB_PASSWORD', required=True),\n)\nCATALOG_FILE = env('MS_CATALOG_FILE', '/metastore/web/metastore-catalog.json')\n\n# ── источники ────────────────────────────────────────────────────────────────\nCH_CONF = dict(\n    host=env('CH_HOST', required=True),\n    port=int(env('CH_PORT', '9000')),\n    user=env('CH_USER', required=True),\n    password=env('CH_PASSWORD', ''),\n    connect_timeout=30,\n)\n\nGP_DSN = dict(\n    host=env('GP_HOST', required=True),\n    port=int(env('GP_PORT', '5432')),\n    dbname=env('GP_DB', required=True),\n    user=env('GP_USER', required=True),\n    password=env('GP_PASSWORD', ''),\n    connect_timeout=30,\n)\n\n# необязательный третий источник — ваша старая PG с метаданными.\n# Оставьте PGMD_HOST пустым в .env, чтобы пропустить.\nPGMD_DSN = None\nif env('PGMD_HOST'):\n    PGMD_DSN = dict(\n        host=env('PGMD_HOST'),\n        port=int(env('PGMD_PORT', '5432')),\n        dbname=env('PGMD_DB', required=True),\n        user=env('PGMD_USER', required=True),\n        password=env('PGMD_PASSWORD', ''),\n        connect_timeout=30,\n    )\n\n# ── что показываем и что прячем ──────────────────────────────────────────────\nDBS = [\n    {\"key\": \"ch\", \"name\": \"ClickHouse\",          \"badge\": \"CH\", \"color\": \"#f5b53f\"},\n    {\"key\": \"gg\", \"name\": \"Greengage\",           \"badge\": \"GG\", \"color\": \"#4caf7d\"},\n    {\"key\": \"pg\", \"name\": \"PostgreSQL Metadata\", \"badge\": \"PG\", \"color\": \"#7b9fd4\"},\n]\n\nEXCLUDE_SCHEMAS_CH = ('system', 'INFORMATION_SCHEMA', 'information_schema', 'default')\nEXCLUDE_SCHEMAS_GP = ('information_schema', 'pg_catalog', 'gp_toolkit', 'pg_toast',\n                      'kafka', 'stg_cps', 'stg_kfk', 'str_arch')\nEXCLUDE_SCHEMAS_PG = ('information_schema', 'pg_catalog', 'pg_toast', 'pg_temp_1')\n\n# ── что прячем от панели ─────────────────────────────────────────────────────\n# Шаблоны в стиле glob, применяются ко ВСЕМ источникам.\n#\n# Важно: спрятанное всё равно попадает в catalog.obj_* и ищется SQL-ом через\n# catalog.v_search. Прячем только из панели, чтобы она не тонула в песочницах.\n# Сколько объектов ушло по фильтрам — печатается при сборе.\nHIDE_SCHEMAS = (\n    'srv_*',          # служебные схемы Greengage\n    'sandbox_*',      # личные песочницы аналитиков\n    # 'prod_tmp',     # раскомментируйте, если временное тоже не нужно\n    # 'test_*',\n    # 'prod_v_*',     # legacy distributed-вьюхи\n)\n\nHIDE_TABLES = (\n    '*_prt_*',        # партиции-потомки (legacy-партиционирование GP)\n    '*_prep',\n    '*_bckp', '*_bak', '*_backup',\n    '*_tmp', 'tmp_*',\n)\n\nCOLLECT_SIZES = True     # строки и объём на диске\nCOLLECT_KEYS = True      # ORDER BY / PARTITION BY / DISTRIBUTED BY\n\n# ── проверка связи ───────────────────────────────────────────────────────────\nprint('python', sys.version.split()[0])\nprint('psycopg2', psycopg2.__version__.split()[0])\n\ndef ping(dsn, label):\n    conn = psycopg2.connect(**dsn)\n    try:\n        with conn.cursor() as cur:\n            cur.execute('SELECT version()')\n            print(f'✅ {label:<14}:', cur.fetchone()[0][:60])\n    finally:\n        conn.close()\n\nping(MS_DSN, 'metastore-db')\nping(GP_DSN, 'Greengage')\nprint(f'✅ {\"ClickHouse\":<14}:', ClickHouseClient(**CH_CONF).execute('SELECT version()')[0][0])\nif PGMD_DSN:\n    ping(PGMD_DSN, 'PG Metadata')\nelse:\n    print('➖ PG Metadata  : пропущен (PGMD_HOST пуст)')\n\nprint('\\n📁 каталог будет записан в', CATALOG_FILE)\nprint('   папка доступна на запись:', os.access(os.path.dirname(CATALOG_FILE), os.W_OK))\n",
+      "user": "anonymous",
+      "dateUpdated": "2026-08-07T12:00:00+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12.0,
+        "fontSize": 9.0,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "python",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/python",
+        "editorHide": false,
+        "tableHide": false
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_metastore_02",
+      "id": "paragraph_metastore_02",
+      "dateCreated": "2026-08-07T12:00:00+0000",
+      "status": "READY"
+    },
+    {
+      "title": "2. DDL — таблицы каталога",
+      "text": "%python\n# =============================================================================\n#  2. DDL — таблицы каталога в metastore-db\n#  Запускается один раз. Повторный запуск безопасен (IF NOT EXISTS).\n#\n#  Две группы таблиц:\n#    desc_*  — описания, которые пишут люди. Живут вечно, коллектор их не трогает.\n#    obj_*   — метаданные, собранные из БД. Полностью перезаписываются каждый прогон.\n# =============================================================================\n\nDDL = r\"\"\"\nCREATE SCHEMA IF NOT EXISTS catalog;\nCOMMENT ON SCHEMA catalog IS 'Каталог DWH: описания + собранные метаданные';\n\n-- ── описания, которые пишут аналитики ───────────────────────────────────────\nCREATE TABLE IF NOT EXISTS catalog.desc_schema (\n    db_key      text NOT NULL CHECK (db_key IN ('ch','gg','pg')),\n    schema_name text NOT NULL,\n    description text NOT NULL,\n    updated_by  text NOT NULL DEFAULT current_user,\n    updated_at  timestamptz NOT NULL DEFAULT now(),\n    PRIMARY KEY (db_key, schema_name)\n);\n\nCREATE TABLE IF NOT EXISTS catalog.desc_table (\n    db_key      text NOT NULL CHECK (db_key IN ('ch','gg','pg')),\n    schema_name text NOT NULL,\n    table_name  text NOT NULL,\n    description text,\n    doc_url     text,\n    updated_by  text NOT NULL DEFAULT current_user,\n    updated_at  timestamptz NOT NULL DEFAULT now(),\n    PRIMARY KEY (db_key, schema_name, table_name)\n);\n\nCREATE TABLE IF NOT EXISTS catalog.desc_column (\n    db_key      text NOT NULL CHECK (db_key IN ('ch','gg','pg')),\n    schema_name text NOT NULL,\n    table_name  text NOT NULL,\n    column_name text NOT NULL,\n    description text NOT NULL,\n    updated_by  text NOT NULL DEFAULT current_user,\n    updated_at  timestamptz NOT NULL DEFAULT now(),\n    PRIMARY KEY (db_key, schema_name, table_name, column_name)\n);\n\n-- ── метаданные, собранные коллектором ───────────────────────────────────────\nCREATE TABLE IF NOT EXISTS catalog.obj_table (\n    db_key        text NOT NULL,\n    schema_name   text NOT NULL,\n    table_name    text NOT NULL,\n    engine        text,\n    native_comment text,\n    n_rows        bigint,\n    size_h        text,\n    collected_at  timestamptz NOT NULL DEFAULT now(),\n    PRIMARY KEY (db_key, schema_name, table_name)\n);\n\nCREATE TABLE IF NOT EXISTS catalog.obj_column (\n    db_key        text NOT NULL,\n    schema_name   text NOT NULL,\n    table_name    text NOT NULL,\n    column_name   text NOT NULL,\n    ordinal       int,\n    data_type     text,\n    key_tag       text,\n    native_comment text,\n    collected_at  timestamptz NOT NULL DEFAULT now(),\n    PRIMARY KEY (db_key, schema_name, table_name, column_name)\n);\n\nCREATE INDEX IF NOT EXISTS obj_column_name_idx ON catalog.obj_column (column_name);\nCREATE INDEX IF NOT EXISTS obj_table_name_idx  ON catalog.obj_table  (table_name);\n\n-- ── история: собранный JSON целиком ─────────────────────────────────────────\nCREATE TABLE IF NOT EXISTS catalog.snapshot (\n    snapshot_id  bigserial PRIMARY KEY,\n    collected_at timestamptz NOT NULL DEFAULT now(),\n    n_tables     int,\n    n_columns    int,\n    payload      jsonb NOT NULL\n);\n\n-- ── автообновление updated_at / updated_by ──────────────────────────────────\nCREATE OR REPLACE FUNCTION catalog.touch() RETURNS trigger AS $touch$\nBEGIN\n    NEW.updated_at := now();\n    NEW.updated_by := current_user;\n    RETURN NEW;\nEND;\n$touch$ LANGUAGE plpgsql;\n\nDO $mk$\nDECLARE t text;\nBEGIN\n    FOREACH t IN ARRAY ARRAY['desc_schema','desc_table','desc_column'] LOOP\n        EXECUTE format(\n            'DROP TRIGGER IF EXISTS %1$s_touch ON catalog.%1$s;\n             CREATE TRIGGER %1$s_touch BEFORE INSERT OR UPDATE ON catalog.%1$s\n             FOR EACH ROW EXECUTE PROCEDURE catalog.touch();', t);\n    END LOOP;\nEND $mk$;\n\n-- ── удобный вид для поиска по каталогу обычным SQL ──────────────────────────\nCREATE OR REPLACE VIEW catalog.v_search AS\nSELECT c.db_key,\n       c.schema_name,\n       c.table_name,\n       c.column_name,\n       c.data_type,\n       c.key_tag,\n       COALESCE(dc.description, c.native_comment, '') AS column_desc,\n       COALESCE(dt.description, t.native_comment, '') AS table_desc,\n       dt.doc_url,\n       t.n_rows,\n       t.size_h\nFROM catalog.obj_column c\nJOIN catalog.obj_table  t USING (db_key, schema_name, table_name)\nLEFT JOIN catalog.desc_column dc USING (db_key, schema_name, table_name, column_name)\nLEFT JOIN catalog.desc_table  dt USING (db_key, schema_name, table_name);\n\nCOMMENT ON VIEW catalog.v_search IS\n  'Плоский каталог: колонка + тип + описание + таблица. Для ad-hoc поиска SQL-ом.';\n\"\"\"\n\nwith psycopg2.connect(**MS_DSN) as conn:\n    with conn.cursor() as cur:\n        cur.execute(DDL)\n    conn.commit()\n\nwith psycopg2.connect(**MS_DSN) as conn, conn.cursor() as cur:\n    cur.execute(\"\"\"\n        SELECT table_name FROM information_schema.tables\n        WHERE table_schema = 'catalog' ORDER BY 1\n    \"\"\")\n    print('✅ создано в schema catalog:')\n    for (t,) in cur.fetchall():\n        print('   •', t)\n",
+      "user": "anonymous",
+      "dateUpdated": "2026-08-07T12:00:00+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12.0,
+        "fontSize": 9.0,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "python",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/python",
+        "editorHide": false,
+        "tableHide": false
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_metastore_03",
+      "id": "paragraph_metastore_03",
+      "dateCreated": "2026-08-07T12:00:00+0000",
+      "status": "READY"
+    },
+    {
+      "title": "3. load_catalog_data() — сбор",
+      "text": "%python\n# =============================================================================\n#  3. load_catalog_data() — сбор метаданных\n#\n#  Что делает за один прогон:\n#    1. читает системные каталоги ClickHouse / Greengage / PostgreSQL;\n#    2. складывает сырьё в catalog.obj_table и catalog.obj_column;\n#    3. подмешивает описания из catalog.desc_*;\n#    4. собирает итоговый JSON, кладёт его в catalog.snapshot\n#       и записывает в файл, который отдаёт nginx боковой панели.\n#\n#  Запускать можно сколько угодно раз: obj_* полностью перезаписываются,\n#  desc_* не трогаются.\n# =============================================================================\n\n# ─────────────────────────────── SQL ─────────────────────────────────────────\n\nCH_TABLES_SQL = \"\"\"\nSELECT database, name, engine, comment, total_rows, formatReadableSize(total_bytes)\nFROM system.tables\nWHERE database NOT IN %(exclude)s AND is_temporary = 0\nORDER BY database, name\n\"\"\"\n\nCH_COLUMNS_SQL = \"\"\"\nSELECT database, table, name, type, comment, position,\n       is_in_sorting_key, is_in_partition_key\nFROM system.columns\nWHERE database NOT IN %(exclude)s\nORDER BY database, table, position\n\"\"\"\n\nPG_TABLES_SQL = \"\"\"\nSELECT n.nspname, c.relname,\n       CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'partitioned table'\n                      WHEN 'v' THEN 'view'  WHEN 'm' THEN 'materialized view'\n                      WHEN 'f' THEN 'foreign table' ELSE c.relkind::text END,\n       obj_description(c.oid, 'pg_class'),\n       CASE WHEN c.reltuples < 0 THEN NULL ELSE c.reltuples::bigint END,\n       {size_expr}\nFROM pg_class c\nJOIN pg_namespace n ON n.oid = c.relnamespace\nWHERE c.relkind IN ('r','p','v','m','f')\n  AND n.nspname NOT IN %(exclude)s\n  {part_filter}\nORDER BY 1, 2\n\"\"\"\n\nPG_COLUMNS_SQL = \"\"\"\nSELECT n.nspname, c.relname, a.attname,\n       format_type(a.atttypid, a.atttypmod),\n       col_description(c.oid, a.attnum),\n       a.attnum\nFROM pg_class c\nJOIN pg_namespace n ON n.oid = c.relnamespace\nJOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped\nWHERE c.relkind IN ('r','p','v','m','f')\n  AND n.nspname NOT IN %(exclude)s\n  {part_filter}\nORDER BY 1, 2, a.attnum\n\"\"\"\n\nPG_SCHEMA_COMMENT_SQL = \"\"\"\nSELECT n.nspname, obj_description(n.oid, 'pg_namespace')\nFROM pg_namespace n WHERE n.nspname NOT IN %(exclude)s\n\"\"\"\n\nHAS_RELISPARTITION_SQL = \"\"\"\nSELECT count(*) FROM pg_attribute\nWHERE attrelid = 'pg_class'::regclass AND attname = 'relispartition'\n\"\"\"\n\n# Ключ распределения Greenplum/Greengage. На обычном PG таблицы нет.\nGP_DISTKEY_SQL = \"\"\"\nSELECT n.nspname, c.relname, a.attname\nFROM gp_distribution_policy d\nJOIN pg_class c     ON c.oid = d.localoid\nJOIN pg_namespace n ON n.oid = c.relnamespace\nJOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY (d.distkey::int2[]::int[])\nWHERE n.nspname NOT IN %(exclude)s\n\"\"\"\n\n# Партиционирование: сначала legacy-вью GP6, потом нативное PG10+.\nGP_PARTCOL_SQL = \"\"\"\nSELECT schemaname, tablename, columnname\nFROM pg_catalog.pg_partition_columns WHERE schemaname NOT IN %(exclude)s\n\"\"\"\n\nPG_PARTKEY_SQL = \"\"\"\nSELECT n.nspname, c.relname, a.attname\nFROM pg_partitioned_table p\nJOIN pg_class c     ON c.oid = p.partrelid\nJOIN pg_namespace n ON n.oid = c.relnamespace\nJOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY (p.partattrs::int2[]::int[])\nWHERE n.nspname NOT IN %(exclude)s\n\"\"\"\n\n\n# ────────────────────────────── хелперы ──────────────────────────────────────\n\ndef pg_rows(dsn, sql, params=None):\n    conn = psycopg2.connect(**dsn)\n    try:\n        with conn.cursor() as cur:\n            cur.execute(sql, params or {})\n            return cur.fetchall()\n    finally:\n        conn.close()          # `with psycopg2.connect(...)` закрывает транзакцию, но НЕ соединение\n\n\ndef pg_rows_safe(dsn, sql, label, params=None):\n    \"\"\"Необязательный запрос: нет объекта — просто пропускаем.\"\"\"\n    try:\n        return pg_rows(dsn, sql, params)\n    except Exception as exc:\n        print(f'   ⚠ {label}: пропущено ({type(exc).__name__})')\n        return []\n\n\ndef pg_sql(dsn, template):\n    \"\"\"Подставляет куски, зависящие от версии сервера.\"\"\"\n    part_filter = ''\n    try:\n        if pg_rows(dsn, HAS_RELISPARTITION_SQL)[0][0]:\n            part_filter = 'AND NOT c.relispartition'\n    except Exception:\n        pass\n    return template.format(\n        part_filter=part_filter,\n        size_expr=('pg_size_pretty(pg_total_relation_size(c.oid))'\n                   if COLLECT_SIZES else 'NULL::text'))\n\n\ndef is_hidden(schema, table):\n    \"\"\"Прятать ли объект от панели. В catalog.obj_* он всё равно попадёт.\"\"\"\n    if any(fnmatch.fnmatchcase(schema, p) for p in HIDE_SCHEMAS):\n        return True\n    return any(fnmatch.fnmatchcase(table, p) for p in HIDE_TABLES)\n\n\n# ─────────────────────────── сбор по источникам ──────────────────────────────\n# Каждый сборщик возвращает три плоских списка:\n#   tables  : (schema, table, engine, comment, n_rows, size_h)\n#   columns : (schema, table, column, ordinal, data_type, key_tag, comment)\n#   sdesc   : {schema: comment}\n\ndef collect_ch():\n    print('🏗️  ClickHouse…')\n    ch = ClickHouseClient(**CH_CONF)\n    p = {'exclude': EXCLUDE_SCHEMAS_CH}\n    tables = [(s, t, eng, com or None, rows, size)\n              for s, t, eng, com, rows, size in ch.execute(CH_TABLES_SQL, p)]\n    columns = []\n    for s, t, name, typ, com, pos, in_ob, in_pt in ch.execute(CH_COLUMNS_SQL, p):\n        key = 'ORDER BY' if in_ob else ('PARTITION BY' if in_pt else None)\n        columns.append((s, t, name, pos, typ, key, com or None))\n    print(f'   {len(tables)} таблиц, {len(columns)} колонок')\n    return tables, columns, {}\n\n\ndef collect_pg_like(dsn, label, exclude, with_gp_keys=False):\n    print(f'{label}…')\n    p = {'exclude': exclude}\n    tables = pg_rows(dsn, pg_sql(dsn, PG_TABLES_SQL), p)\n    raw_cols = pg_rows(dsn, pg_sql(dsn, PG_COLUMNS_SQL), p)\n    sdesc = {s: d for s, d in pg_rows_safe(dsn, PG_SCHEMA_COMMENT_SQL, 'комментарии схем', p)}\n\n    keys = {}\n    if COLLECT_KEYS and with_gp_keys:\n        for s, t, c in pg_rows_safe(dsn, GP_DISTKEY_SQL, 'gp_distribution_policy', p):\n            keys[(s, t, c)] = 'DISTRIBUTED BY'\n        part = (pg_rows_safe(dsn, GP_PARTCOL_SQL, 'pg_partition_columns', p)\n                or pg_rows_safe(dsn, PG_PARTKEY_SQL, 'pg_partitioned_table', p))\n        for s, t, c in part:\n            keys[(s, t, c)] = 'PARTITION BY'\n\n    columns = [(s, t, name, pos, typ, keys.get((s, t, name)), com)\n               for s, t, name, typ, com, pos in raw_cols]\n    print(f'   {len(tables)} таблиц, {len(columns)} колонок'\n          + (f', {len(keys)} ключей' if keys else ''))\n    return tables, columns, sdesc\n\n\n# ──────────────────────── запись сырья в metastore ───────────────────────────\n\ndef store_objects(conn, db_key, tables, columns):\n    with conn.cursor() as cur:\n        cur.execute('DELETE FROM catalog.obj_column WHERE db_key = %s', (db_key,))\n        cur.execute('DELETE FROM catalog.obj_table  WHERE db_key = %s', (db_key,))\n        psycopg2.extras.execute_values(\n            cur,\n            'INSERT INTO catalog.obj_table '\n            '(db_key, schema_name, table_name, engine, native_comment, n_rows, size_h) VALUES %s',\n            [(db_key,) + tuple(r) for r in tables], page_size=1000)\n        psycopg2.extras.execute_values(\n            cur,\n            'INSERT INTO catalog.obj_column '\n            '(db_key, schema_name, table_name, column_name, ordinal, data_type, key_tag, native_comment) '\n            'VALUES %s',\n            [(db_key,) + tuple(r) for r in columns], page_size=2000)\n\n\n# ──────────────────────────── сборка JSON ────────────────────────────────────\n\ndef fetch_descriptions(conn):\n    out = {'schema': {}, 'table': {}, 'column': {}}\n    with conn.cursor() as cur:\n        cur.execute('SELECT db_key, schema_name, description FROM catalog.desc_schema')\n        for k, s, d in cur.fetchall():\n            out['schema'][(k, s)] = d\n        cur.execute('SELECT db_key, schema_name, table_name, description, doc_url FROM catalog.desc_table')\n        for k, s, t, d, u in cur.fetchall():\n            out['table'][(k, s, t)] = (d, u)\n        cur.execute('SELECT db_key, schema_name, table_name, column_name, description FROM catalog.desc_column')\n        for k, s, t, c, d in cur.fetchall():\n            out['column'][(k, s, t, c)] = d\n    print(f\"   📖 описания: {len(out['schema'])} схем, \"\n          f\"{len(out['table'])} таблиц, {len(out['column'])} колонок\")\n    return out\n\n\ndef assemble(db_key, tables, columns, sdesc, desc):\n    \"\"\"Плоские списки → дерево схема → таблица → колонки.\"\"\"\n    by_table = {}\n    for s, t, name, pos, typ, key, com in columns:\n        by_table.setdefault((s, t), []).append((name, typ, key, com))\n\n    schemas = {}\n    hidden = 0\n    for s, t, engine, tcom, n_rows, size_h in tables:\n        if is_hidden(s, t):\n            hidden += 1\n            continue\n\n        cols = []\n        for name, typ, key, com in by_table.get((s, t), []):\n            col = {'n': name,\n                   't': typ,\n                   'c': desc['column'].get((db_key, s, t, name)) or com or ''}\n            if key:\n                col['k'] = key\n            cols.append(col)\n\n        d, doc = desc['table'].get((db_key, s, t), (None, None))\n        entry = {'name': t, 'desc': d or tcom or '', 'cols': cols}\n        if doc:\n            entry['doc'] = doc\n        if engine:\n            entry['engine'] = engine\n        if n_rows is not None:\n            entry['rows'] = int(n_rows)\n        if size_h:\n            entry['size'] = size_h\n        schemas.setdefault(s, []).append(entry)\n\n    out = [{'name': s,\n            'desc': desc['schema'].get((db_key, s)) or sdesc.get(s) or '',\n            'tables': sorted(schemas[s], key=lambda x: x['name'])}\n           for s in sorted(schemas)]\n    return out, hidden\n\n\n# ────────────────────────────── точка входа ──────────────────────────────────\n\ndef load_catalog_data(write_file=True):\n    started = datetime.datetime.now()\n    sources = {\n        'ch': lambda: collect_ch(),\n        'gg': lambda: collect_pg_like(GP_DSN, '🟢 Greengage', EXCLUDE_SCHEMAS_GP, with_gp_keys=True),\n        'pg': (lambda: collect_pg_like(PGMD_DSN, '🧩 PostgreSQL Metadata', EXCLUDE_SCHEMAS_PG))\n              if PGMD_DSN else None,\n    }\n\n    raw = {}\n    conn = psycopg2.connect(**MS_DSN)\n    try:\n        for db in DBS:\n            fn = sources.get(db['key'])\n            if fn is None:\n                print(f\"➖ {db['name']}: пропущен\")\n                raw[db['key']] = ([], [], {})\n                continue\n            try:\n                tables, columns, sdesc = fn()\n                store_objects(conn, db['key'], tables, columns)\n                conn.commit()\n                raw[db['key']] = (tables, columns, sdesc)\n            except Exception as exc:\n                conn.rollback()\n                print(f\"   ❌ {db['name']}: {type(exc).__name__}: {str(exc)[:200]}\")\n                print('      (в metastore осталась прошлая версия этой БД)')\n                raw[db['key']] = ([], [], {})\n\n        desc = fetch_descriptions(conn)\n\n        payload = {'generated_at': started.strftime('%Y-%m-%d %H:%M:%S'), 'dbs': []}\n        n_hidden = 0\n        for db in DBS:\n            tables, columns, sdesc = raw[db['key']]\n            schemas, hidden = assemble(db['key'], tables, columns, sdesc, desc)\n            n_hidden += hidden\n            payload['dbs'].append({**db, 'schemas': schemas})\n\n        n_tab = sum(len(s['tables']) for d in payload['dbs'] for s in d['schemas'])\n        n_col = sum(len(t['cols']) for d in payload['dbs'] for s in d['schemas'] for t in s['tables'])\n        if n_hidden:\n            print(f'   🙈 скрыто от панели по HIDE_SCHEMAS/HIDE_TABLES: {n_hidden} таблиц '\n                  f'(в catalog.obj_* они есть, ищутся через catalog.v_search)')\n\n        with conn.cursor() as cur:\n            cur.execute(\n                'INSERT INTO catalog.snapshot (n_tables, n_columns, payload) VALUES (%s, %s, %s)',\n                (n_tab, n_col, json.dumps(payload, ensure_ascii=False)))\n            cur.execute('DELETE FROM catalog.snapshot WHERE snapshot_id NOT IN '\n                        '(SELECT snapshot_id FROM catalog.snapshot ORDER BY collected_at DESC LIMIT 30)')\n        conn.commit()\n    finally:\n        conn.close()\n\n    body = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))\n    if write_file:\n        tmp = CATALOG_FILE + '.tmp'\n        with open(tmp, 'w', encoding='utf-8') as fh:\n            fh.write(body)\n        os.replace(tmp, CATALOG_FILE)           # атомарная подмена, панель не поймает недописанный файл\n        os.chmod(CATALOG_FILE, 0o644)\n\n    took = (datetime.datetime.now() - started).total_seconds()\n    kb = len(body.encode('utf-8')) / 1024\n    print(f'\\n✅ {n_tab} таблиц, {n_col} колонок за {took:.0f} с')\n    print(f'   размер каталога: {kb:.0f} КБ')\n    if write_file:\n        print(f'   записано в {CATALOG_FILE}')\n    if kb > 3000:\n        print(f'\\n   ⚠ каталог {kb/1024:.1f} МБ — его тянет каждый браузер при открытии Zeppelin.')\n        print('     nginx отдаёт его в gzip (примерно вчетверо меньше), но если хочется легче —')\n        print('     добавьте схемы в HIDE_SCHEMAS в первом параграфе. Что именно тяжёлое:')\n        for d in payload['dbs']:\n            top = sorted(d['schemas'],\n                         key=lambda s: -sum(len(t['cols']) for t in s['tables']))[:5]\n            for s in top:\n                nc = sum(len(t['cols']) for t in s['tables'])\n                if nc > 3000:\n                    print(f\"       {d['badge']}  {s['name']:<32} {len(s['tables']):>5} табл. {nc:>7} кол.\")\n    return payload\n\n\ncatalog = load_catalog_data()\n",
+      "user": "anonymous",
+      "dateUpdated": "2026-08-07T12:00:00+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12.0,
+        "fontSize": 9.0,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "python",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/python",
+        "editorHide": false,
+        "tableHide": false
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_metastore_04",
+      "id": "paragraph_metastore_04",
+      "dateCreated": "2026-08-07T12:00:00+0000",
+      "status": "READY"
+    },
+    {
+      "title": "4. Описания",
+      "text": "%python\n# =============================================================================\n#  4. Описания\n#  Заполняются руками и живут в metastore-db. Коллектор их не перетирает.\n#  Приоритет в панели: desc_* → нативный COMMENT ON в самой БД → пусто.\n# =============================================================================\n\ndef describe(db_key, schema, table=None, column=None, text=None, doc_url=None):\n    \"\"\"Записать описание. Уровень определяется по заполненным аргументам.\n\n    describe('gg', 'mart_ru', text='Аналитические витрины')\n    describe('gg', 'mart_ru', 'deposit_detail', text='Депозиты', doc_url='https://xwiki…')\n    describe('gg', 'mart_ru', 'deposit_detail', 'account_id', text='ID счёта игрока')\n    \"\"\"\n    conn = psycopg2.connect(**MS_DSN)\n    try:\n        with conn.cursor() as cur:\n            if column:\n                cur.execute(\"\"\"\n                    INSERT INTO catalog.desc_column\n                           (db_key, schema_name, table_name, column_name, description)\n                    VALUES (%s, %s, %s, %s, %s)\n                    ON CONFLICT (db_key, schema_name, table_name, column_name)\n                    DO UPDATE SET description = EXCLUDED.description\n                \"\"\", (db_key, schema, table, column, text))\n            elif table:\n                cur.execute(\"\"\"\n                    INSERT INTO catalog.desc_table\n                           (db_key, schema_name, table_name, description, doc_url)\n                    VALUES (%s, %s, %s, %s, %s)\n                    ON CONFLICT (db_key, schema_name, table_name)\n                    DO UPDATE SET description = COALESCE(EXCLUDED.description, catalog.desc_table.description),\n                                  doc_url     = COALESCE(EXCLUDED.doc_url,     catalog.desc_table.doc_url)\n                \"\"\", (db_key, schema, table, text, doc_url))\n            else:\n                cur.execute(\"\"\"\n                    INSERT INTO catalog.desc_schema (db_key, schema_name, description)\n                    VALUES (%s, %s, %s)\n                    ON CONFLICT (db_key, schema_name)\n                    DO UPDATE SET description = EXCLUDED.description\n                \"\"\", (db_key, schema, text))\n        conn.commit()\n    finally:\n        conn.close()\n\n\ndef todo(limit=40):\n    \"\"\"Что описать в первую очередь: самые большие таблицы без описания.\"\"\"\n    conn = psycopg2.connect(**MS_DSN)\n    try:\n        with conn.cursor() as cur:\n            cur.execute(\"\"\"\n                SELECT t.db_key, t.schema_name, t.table_name, t.n_rows\n                FROM catalog.obj_table t\n                LEFT JOIN catalog.desc_table d USING (db_key, schema_name, table_name)\n                WHERE COALESCE(NULLIF(d.description, ''), t.native_comment) IS NULL\n                ORDER BY t.n_rows DESC NULLS LAST\n                LIMIT %s\n            \"\"\", (limit,))\n            rows = cur.fetchall()\n    finally:\n        conn.close()\n    print(f'без описания — {len(rows)} самых крупных:\\n')\n    for k, s, t, n in rows:\n        print(f'  {k}  {s}.{t:<40} {n if n is not None else \"?\":>15}')\n    return rows\n\n\n# ── примеры, раскомментируйте и правьте под себя ─────────────────────────────\n# describe('gg', 'mart_ru', text='Аналитические витрины для аналитиков')\n# describe('gg', 'mart_ru', 'deposit_detail', text='Начисление депозитов',\n#          doc_url='https://xwiki.olimp.dev/bin/view/...')\n# describe('gg', 'mart_ru', 'deposit_detail', 'account_id', text='Идентификатор счёта игрока')\n\ntodo()\n",
+      "user": "anonymous",
+      "dateUpdated": "2026-08-07T12:00:00+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12.0,
+        "fontSize": 9.0,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "python",
+          "editOnDblClick": false,
+          "completionKey": "TAB",
+          "completionSupport": true
+        },
+        "editorMode": "ace/mode/python",
+        "editorHide": false,
+        "tableHide": false
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_metastore_05",
+      "id": "paragraph_metastore_05",
+      "dateCreated": "2026-08-07T12:00:00+0000",
+      "status": "READY"
+    },
+    {
+      "title": "5. Расписание",
+      "text": "%md\n## Поставить на расписание\n\nПока всё запускается руками: параграфы 1 → 3 (DDL из параграфа 2 нужен только первый раз).\n\nКогда убедитесь, что каталог собирается правильно:\n\n1. Иконка часов в шапке ноута → выберите интервал, например каждые 2 часа: `0 0 */2 * * ?`\n2. Включите **Auto-restart interpreter on cron execution** — иначе соединения\n   к ClickHouse и Greengage протухнут между запусками.\n3. Убедитесь, что параграф 2 (DDL) не мешает: он идемпотентный, повторный\n   запуск безопасен, но можно просто отключить его через\n   *Run all* → снять галочку у параграфа.\n\n`zeppelin.notebook.cron.enable=true` и `cron.folders=/` у вас уже стоят,\nдополнительно ничего включать не нужно.\n\n## Права на ноут\n\nПанель читает **файл каталога**, а не этот ноут, поэтому раздавать доступ\nк ноуту всей команде не нужно. Достаточно, чтобы к нему имели доступ те,\nкто правит описания.\n\n## Проверить каталог руками\n\n```sql\n-- где лежит колонка account_id\nSELECT db_key, schema_name, table_name, data_type\nFROM catalog.v_search WHERE column_name = 'account_id';\n\n-- когда собирали последний раз\nSELECT collected_at, n_tables, n_columns FROM catalog.snapshot\nORDER BY collected_at DESC LIMIT 5;\n```\n",
+      "user": "anonymous",
+      "dateUpdated": "2026-08-07T12:00:00+0000",
+      "progress": 0,
+      "config": {
+        "colWidth": 12.0,
+        "fontSize": 9.0,
+        "enabled": true,
+        "results": {},
+        "editorSetting": {
+          "language": "md",
+          "editOnDblClick": true,
+          "completionKey": "TAB",
+          "completionSupport": false
+        },
+        "editorMode": "ace/mode/markdown",
+        "editorHide": true,
+        "tableHide": false
+      },
+      "settings": {
+        "params": {},
+        "forms": {}
+      },
+      "apps": [],
+      "runtimeInfos": {},
+      "progressUpdateIntervalMs": 500,
+      "jobName": "paragraph_metastore_06",
+      "id": "paragraph_metastore_06",
+      "dateCreated": "2026-08-07T12:00:00+0000",
+      "status": "READY"
+    }
+  ],
+  "name": "/00. Metastore/00. Metastore Catalog",
+  "id": "2METASTORE1",
+  "defaultInterpreterGroup": "python",
+  "version": "0.12.1",
+  "noteParams": {},
+  "noteForms": {},
+  "angularObjects": {},
+  "config": {
+    "isZeppelinNotebookCronEnable": true,
+    "looknfeel": "default",
+    "personalizedMode": "false"
+  },
+  "info": {}
+}
