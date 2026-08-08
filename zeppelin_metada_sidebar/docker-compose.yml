@@ -1,0 +1,93 @@
+# =============================================================================
+#  Ваш docker-compose.yml с добавленными сервисами метастора.
+#  Всё новое помечено блоками  # ── METASTORE ──, остальное не тронуто.
+# =============================================================================
+services:
+  zeppelin:
+    image: apache/zeppelin:0.12.1
+    container_name: zeppelin
+    hostname: zeppelin
+    entrypoint: ["/usr/bin/tini", "--"]
+    # ── METASTORE: добавлен init_metastore.sh перед стартом ──
+    command: ["bash", "-c", "/docker-entrypoint-init.d/init_metastore.sh; exec bin/zeppelin.sh"]
+    extra_hosts:
+      - "zeppelin:127.0.0.1"
+    # ── METASTORE: чтобы контейнер видел metastore-db по имени ──
+    depends_on:
+      - metastore-db
+    ports:
+      - "8085:8085"
+      - "8181:8181"   # Metrics (Prometheus endpoint)
+    volumes:
+      # ── METASTORE ──────────────────────────────────────────────────────────
+      - ./metastore/init_metastore.sh:/docker-entrypoint-init.d/init_metastore.sh:ro
+      - ./metastore/pylibs:/metastore/pylibs      # питоновские зависимости коллектора
+      - ./metastore/web:/metastore/web            # сюда коллектор пишет каталог
+      # ───────────────────────────────────────────────────────────────────────
+    environment:
+      - LANG=en_US.UTF-8
+      - LC_ALL=en_US.UTF-8
+      - ZEPPELIN_INTERPRETER_OUTPUT_LIMIT=102400
+
+      # ── METASTORE: всё из .env, паролей в файле нет ────────────────────────
+      - MS_DB_HOST=metastore-db
+      - MS_DB_PORT=5432
+      - MS_DB_NAME=${MS_DB_NAME}
+      - MS_DB_USER=${MS_DB_USER}
+      - MS_DB_PASSWORD=${MS_DB_PASSWORD}
+      - MS_CATALOG_FILE=/metastore/web/metastore-catalog.json
+      - CH_HOST=${CH_HOST}
+      - CH_PORT=${CH_PORT}
+      - CH_USER=${CH_USER}
+      - CH_PASSWORD=${CH_PASSWORD}
+      - GP_HOST=${GP_HOST}
+      - GP_PORT=${GP_PORT}
+      - GP_DB=${GP_DB}
+      - GP_USER=${GP_USER}
+      - GP_PASSWORD=${GP_PASSWORD}
+      - PGMD_HOST=${PGMD_HOST}
+      - PGMD_PORT=${PGMD_PORT}
+      - PGMD_DB=${PGMD_DB}
+      - PGMD_USER=${PGMD_USER}
+      - PGMD_PASSWORD=${PGMD_PASSWORD}
+      - PIP_INDEX_URL=${PIP_INDEX_URL}
+      - PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
+      # ───────────────────────────────────────────────────────────────────────
+    restart: unless-stopped
+
+  # ── METASTORE ────────────────────────────────────────────────────────────────
+  # Хранилище каталога: описания, собранные метаданные, история слепков.
+  metastore-db:
+    image: postgres:16-alpine
+    container_name: metastore-db
+    hostname: metastore-db
+    environment:
+      - POSTGRES_DB=${MS_DB_NAME}
+      - POSTGRES_USER=${MS_DB_USER}
+      - POSTGRES_PASSWORD=${MS_DB_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - TZ=Europe/Moscow
+    volumes:
+      - ./metastore/pgdata:/var/lib/postgresql/data
+    ports:
+      # наружу — чтобы можно было подключиться DBeaver-ом. Внутри сети порт 5432.
+      - "${MS_DB_PORT_EXTERNAL:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MS_DB_USER} -d ${MS_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Отдаёт боковой панели два файла: сам скрипт и собранный каталог.
+  # Zeppelin при этом не трогается вообще: упадёт nginx — просто не будет панели.
+  metastore-web:
+    image: nginx:alpine
+    container_name: metastore-web
+    volumes:
+      - ./metastore/web:/usr/share/nginx/html:ro
+      - ./metastore/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${MS_WEB_PORT:-8086}:80"
+    restart: unless-stopped
+
